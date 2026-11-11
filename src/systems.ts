@@ -3,7 +3,7 @@ let MODE = 'menu';
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 /* ---------- feedback ---------- */
-function notify(text, cls) {
+function notify(text, cls?) {
   const box = $('notes'), el = document.createElement('div'); el.className = 'note ' + (cls || ''); el.textContent = text; box.appendChild(el);
   while (box.children.length > 5) box.removeChild(box.firstChild);
   setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 500); }, 3600);
@@ -21,7 +21,7 @@ function flashHurt() { const h = $('hurt'); h.classList.remove('on'); void h.off
 function fade(cb) { const f = $('fade'); f.classList.add('on'); setTimeout(() => { cb(); setTimeout(() => f.classList.remove('on'), 120); }, 380); }
 
 /* ---------- items & progression ---------- */
-function giveItem(id, n = 1, quiet) { G.inv[id] = (G.inv[id] || 0) + n; if (!quiet) notify('+' + n + ' ' + ITEMS[id].n, 'gain'); if (id === 'herb') questEvent('herb'); }
+function giveItem(id, n = 1, quiet?) { G.inv[id] = (G.inv[id] || 0) + n; if (!quiet) notify('+' + n + ' ' + ITEMS[id].n, 'gain'); if (id === 'herb') questEvent('herb'); }
 function giveCoins(n) { G.p.coins += n; notify('+' + n + ' coins', 'gain'); }
 function takeItem(id, n = 1) { G.inv[id] = Math.max(0, (G.inv[id] || 0) - n); if (!G.inv[id]) delete G.inv[id]; }
 function gainXp(n) {
@@ -83,9 +83,9 @@ function currentObjective() {
 
 /* ---------- dialogue ---------- */
 let dlg = null;
-function talk(who, pages, done) { dlg = { who, pages, i: 0, done }; setMode('dialog'); renderDlg(); }
+function talk(who, pages, done?) { dlg = { who, pages, i: 0, done }; setMode('dialog'); renderDlg(); }
 function pickOpt(k) { if (!dlg) return; const pg = dlg.pages[dlg.i]; if (!pg.opts || !pg.opts[k]) return; const cur = dlg, fn = pg.opts[k][1]; sfx('ui'); if (fn) fn(); if (dlg === cur) advanceDlg(true); }
-function advanceDlg(force) {
+function advanceDlg(force?) {
   if (!dlg) return; const pg = dlg.pages[dlg.i]; if (pg.opts && !force) return;
   dlg.i++; sfx('ui');
   if (dlg.i >= dlg.pages.length) { const d = dlg; dlg = null; setMode('play'); if (d.done) d.done(); } else renderDlg();
@@ -105,8 +105,8 @@ function findInteract() {
 }
 
 /* chests */
-const CHESTS = {};
-function chest(id, x, z, items, coins, rot = 0, hidden) {
+const CHESTS: Record<string, Chest> = {};
+function chest(id, x, z, items, coins, rot = 0, hidden?) {
   const y = Math.max(groundAt(x, z), WATER_Y + 0.3), g = new T.Group(); g.position.set(x, y, z); g.rotation.y = rot; scene.add(g);
   mesh(bx(1.2, 0.6, 0.8), lam(0x8a5a30), 0, 0.3, 0, g); mesh(bx(1.26, 0.1, 0.86), lam(GOLD), 0, 0.6, 0, g);
   const lid = new T.Group(); lid.position.set(0, 0.62, -0.4); g.add(lid);
@@ -114,7 +114,7 @@ function chest(id, x, z, items, coins, rot = 0, hidden) {
   const col = addCircle(x, z, 0.75);
   mesh(bx(1.3, 0.12, 0.9), lam(0x5a3d28), 0, 0.06, 0, g); for (const sx of [-0.5, 0.5]) mesh(bx(0.1, 0.66, 0.84), lam(GOLD), sx, 0.33, 0, g); for (const sx of [-0.5, 0.5]) mesh(bx(0.1, 0.34, 0.84), lam(GOLD), sx, 0.15, 0.4, lid);
   const hl = halo(g, 0, 0.9, 0, 3.4, GOLD, 0.45);
-  const c = CHESTS[id] = { id, g, lid, x, z, items, coins, col, hl };
+  const c: Chest = CHESTS[id] = { id, g, lid, x, z, items, coins, col, hl };
   if (hidden) { g.visible = false; col.on = false; }
   addInteract({ x, z, r: 2.4, label: () => (!g.visible || G.flags[id]) ? null : 'Open chest', act: () => {
     G.flags[id] = true; c.open = 0.001; hl.visible = false; sfx('chest'); burst(x, y + 1, z, GOLD, 22, 3.5, 0.9, 1); addRing(x, y + 0.2, z, GOLD, 2.6, 0.6);
@@ -204,7 +204,7 @@ function puzzle3Check() {
   temple.braziers.forEach((b, i) => { if (b.lit) G.flags['br' + i] = true; }); if (temple.eye.lit) G.flags.eye = true; sfx('fire');
   if (temple.braziers.every(b => b.lit) && temple.eye.lit) solvePuzzle('puz3', 'Flame and arrow');
 }
-function updateTemple(dt, instant) {
+function updateTemple(dt, instant?) {
   const b = temple.blockBox, bcx = (b.x0 + b.x1) / 2, bcz = (b.z0 + b.z1) / 2;
   const onPlate = Math.hypot(bcx + 90, bcz + 33) < 1.3, pressed = onPlate || (Math.hypot(PL.pos.x + 90, PL.pos.z + 33) < 1.25 && PL.grounded);
   if (onPlate && !G.flags.puz1) solvePuzzle('puz1', 'The weight of stone');
@@ -218,9 +218,9 @@ function updateTemple(dt, instant) {
 }
 
 /* ---------- NPCs ---------- */
-const NPCS = {};
-function npc(id, name, look, x, z, route, talkFn) {
-  const h = humanoid(look), n = NPCS[id] = { id, name, g: h.g, p: h.p, pos: new T.Vector3(x, groundAt(x, z), z), home: [x, z], route, ri: 0, wait: rng() * 3, yaw: 0, anim: rng() * 4, talk: talkFn };
+const NPCS: Record<string, Npc> = {};
+function npc(id: string, name: string, look: HumanoidLook, x: number, z: number, route?: any, talkFn?: any): Npc {
+  const h = humanoid(look), n: Npc = NPCS[id] = { id, name, g: h.g, p: h.p, pos: new T.Vector3(x, groundAt(x, z), z), home: [x, z], route, ri: 0, wait: rng() * 3, yaw: 0, anim: rng() * 4, talk: talkFn };
   scene.add(h.g); h.g.position.copy(n.pos);
   setTimeout(() => addOutline(h.g, 0.013), 0);
   if (look.prop === 'staff') { const s = grpIn(h.p.handR, 0, 0, 0.03); mesh(cyl(0.03, 0.035, 1.9, 6), lam(TIMBER), 0, 0.35, 0, s); mesh(new T.TorusGeometry(0.11, 0.03, 5, 12, 5), lam(TIMBER), 0, 1.36, 0, s); mesh(sph(0.06, 8, 6), glowMat(RUNE), 0, 1.36, 0, s, true); halo(s, 0, 1.36, 0, 1.2, RUNE, 0.6); n.hold = [-0.5, -0.9]; }
@@ -398,7 +398,7 @@ let panelTab = null, shopOpen = false;
 function openPanel(tab) { if (MODE !== 'play' && MODE !== 'panel' && MODE !== 'dialog') return; if (MODE === 'dialog') { dlg = null; } shopOpen = tab === 'shop'; panelTab = tab; setMode('panel'); renderPanel(); sfx('ui'); }
 function closePanel() { if (MODE === 'panel') { panelTab = null; shopOpen = false; setMode('play'); } }
 $('panel').addEventListener('click', ev => {
-  const b = ev.target.closest('[data-act]'); if (!b) return; const [a, v] = b.dataset.act.split(':'), S = G.p;
+  const b = (ev.target as HTMLElement).closest<HTMLElement>('[data-act]'); if (!b) return; const [a, v] = b.dataset.act.split(':'), S = G.p;
   if (a === 'close') return closePanel();
   if (a === 'tab') { panelTab = v; sfx('ui'); }
   else if (a === 'use') useItem(v);
@@ -417,7 +417,7 @@ function updateEnemyBars() {
     if (!e.alive || e.def.boss || e.hp >= e.def.hp || !(e.hurtShown > 0 || e.state === 'chase' || e.state === 'windup')) continue;
     _pv.set(e.pos.x, e.pos.y + e.def.height + 0.35, e.pos.z).project(camera); if (_pv.z > 1 || Math.abs(_pv.x) > 1.05 || Math.abs(_pv.y) > 1.05) continue;
     let el = ebarPool[n]; if (!el) { el = ebarPool[n] = document.createElement('div'); el.className = 'ebar'; el.innerHTML = '<i></i>'; layer.appendChild(el); }
-    el.style.display = 'block'; el.style.transform = 'translate(' + ((_pv.x * 0.5 + 0.5) * W - 30).toFixed(1) + 'px,' + ((-_pv.y * 0.5 + 0.5) * H).toFixed(1) + 'px)'; el.firstChild.style.width = (e.hp / e.def.hp * 100) + '%'; n++;
+    el.style.display = 'block'; el.style.transform = 'translate(' + ((_pv.x * 0.5 + 0.5) * W - 30).toFixed(1) + 'px,' + ((-_pv.y * 0.5 + 0.5) * H).toFixed(1) + 'px)'; (el.firstChild as HTMLElement).style.width = (e.hp / e.def.hp * 100) + '%'; n++;
   }
   for (let i = n; i < ebarPool.length; i++) ebarPool[i].style.display = 'none';
 }

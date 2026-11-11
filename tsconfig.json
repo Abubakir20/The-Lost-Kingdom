@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "lib": ["ES2020", "DOM"],
+    "module": "none",
+    "outFile": "dist/game.js",
+    "strict": false,
+    "noImplicitAny": false,
+    "types": ["three"],
+    "removeComments": false,
+    "newLine": "lf",
+    "skipLibCheck": true
+  },
+  "files": ["src/globals.d.ts", "src/core.ts", "src/world.ts", "src/scenery.ts", "src/entities.ts", "src/systems.ts", "src/ui.ts", "src/main.ts"]
+}

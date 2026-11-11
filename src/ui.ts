@@ -40,7 +40,7 @@ function renderPanel() {
   const tabs = shopOpen ? [['shop', 'Tessa’s stall']] : [['inventory', 'Pack'], ['journal', 'Journal'], ['map', 'Map']];
   $('panelTabs').innerHTML = tabs.map(t => `<button class="tab${t[0] === panelTab ? ' on' : ''}" data-act="tab:${t[0]}">${t[1]}</button>`).join('') + '<span class="purse2">' + icon('relic') + '<b>' + G.p.coins + '</b> coins</span><button class="tab close" data-act="close" aria-label="Close">Close</button>';
   const body = $('panelBody'), S = G.p; body.className = 'tab-' + panelTab;
-  const row = (ic, title, qty, desc, btn, cls) => `<div class="item${cls ? ' ' + cls : ''}">${icon(ic)}<div class="tx"><b>${title}</b>${qty ? ` <span class="qty">${qty}</span>` : ''}${desc ? `<p>${desc}</p>` : ''}</div>${btn || ''}</div>`;
+  const row = (ic, title, qty, desc, btn?, cls?) => `<div class="item${cls ? ' ' + cls : ''}">${icon(ic)}<div class="tx"><b>${title}</b>${qty ? ` <span class="qty">${qty}</span>` : ''}${desc ? `<p>${desc}</p>` : ''}</div>${btn || ''}</div>`;
   const meter = (label, v, max, cls) => `<div class="meter ${cls}"><span>${label}</span><div><i style="width:${clamp(v / max * 100, 0, 100)}%"></i></div><em>${Math.ceil(v)} / ${max}</em></div>`;
   if (panelTab === 'inventory') {
     const cats = {}; for (const id in G.inv) { if (!G.inv[id] || !ITEMS[id]) continue; (cats[ITEMS[id].c] = cats[ITEMS[id].c] || []).push(id); }
@@ -64,7 +64,7 @@ function renderPanel() {
       h += `<div class="quest ${st} ${q.kind === 'Main quest' ? 'main' : 'side'}"><h4>${esc(q.name)} <span class="qty">${q.kind}${st === 'done' ? ', complete' : ''}</span></h4><p>${esc(q.desc)}</p>` + (st === 'active' ? '<ul>' + q.obj(G.q[id]).map(o => `<li class="${o[1] ? 'ok' : ''}">${esc(o[0])}</li>`).join('') + '</ul>' : '') + `<p class="reward">Reward: ${esc(q.reward)}</p></div>`;
     }
     const lore = ['t_shrine', 't_ruin', 't_mesa', 't_fall'].filter(t => G.flags[t]).length, seen = LOCS.filter(l => G.flags['seen_' + l.id]).length;
-    const tally = (label, v, max) => `<div class="tally"><span>${label}</span><b>${v}${max ? ' / ' + max : ''}</b>${max ? `<div><i style="width:${v / max * 100}%"></i></div>` : ''}</div>`;
+    const tally = (label, v, max?) => `<div class="tally"><span>${label}</span><b>${v}${max ? ' / ' + max : ''}</b>${max ? `<div><i style="width:${v / max * 100}%"></i></div>` : ''}</div>`;
     body.innerHTML = `<div class="cols two"><section><h3>Quests</h3>${h || '<p class="empty">No quests yet. Speak with the spirit at the shrine.</p>'}</section>
       <section class="card"><h3>Discoveries</h3>${tally('Locations', seen, LOCS.length)}${tally('Eldorian relics', G.inv.relic || 0, 5)}${tally('Inscriptions read', lore, 4)}${tally('Foes defeated', G.kills)}${tally('Time played', Math.floor(G.playTime / 60) + ' min')}</section></div>`;
   } else if (panelTab === 'map') {
@@ -78,7 +78,7 @@ function renderPanel() {
 }
 const w2m = (v, N) => (v + WORLD) / (WORLD * 2) * N;
 function drawBigMap() {
-  const c = $('bigmap'); if (!c) return; const x = c.getContext('2d'), N = c.width;
+  const c = $<HTMLCanvasElement>('bigmap'); if (!c) return; const x = c.getContext('2d'), N = c.width;
   x.imageSmoothingEnabled = true; x.drawImage(mapCanvas, 0, 0, N, N);
   // vignette of old paper, compass rose
   const vg = x.createRadialGradient(N / 2, N / 2, N * 0.3, N / 2, N / 2, N * 0.75); vg.addColorStop(0, 'rgba(120,90,40,0)'); vg.addColorStop(1, 'rgba(90,60,20,.5)'); x.fillStyle = vg; x.fillRect(0, 0, N, N);
@@ -96,7 +96,7 @@ function drawBigMap() {
 }
 
 /* ---------- HUD ---------- */
-const mini = $('minimap').getContext('2d', { willReadFrequently: true });
+const mini = $<HTMLCanvasElement>('minimap').getContext('2d', { willReadFrequently: true });
 let hudT = 0, miniT = 0, pipN = 0;
 function updateHUD(dt) {
   const S = G.p;
@@ -107,15 +107,15 @@ function updateHUD(dt) {
   // health as sunstone pips (20 each), stamina as a ring round the level crest
   const n = Math.ceil(S.maxHp / 20), box = $('hpPips');
   if (n !== pipN) { pipN = n; box.innerHTML = '<span class="pip"><i></i></span>'.repeat(n); }
-  for (let i = 0; i < n; i++) box.children[i].firstChild.style.width = clamp((S.hp - i * 20) / 20 * 100, 0, 100) + '%';
+  for (let i = 0; i < n; i++) (box.children[i].firstChild as HTMLElement).style.width = clamp((S.hp - i * 20) / 20 * 100, 0, 100) + '%';
   box.classList.toggle('low', S.hp / S.maxHp < 0.3);
   const C = 169.6, sr = $('stRing'), sf = clamp(S.st / S.maxSt, 0, 1); sr.style.strokeDashoffset = (C * (1 - sf)).toFixed(1); sr.style.stroke = sf < 0.25 ? '#e2603a' : '#a8dd5a'; $('crest').classList.toggle('spent', sf < 0.999);
   $('mpFill').style.width = clamp(S.mp / S.maxMp * 100, 0, 100) + '%'; $('mpBar').style.width = (S.maxMp * 2.4) + 'px';
-  $('xpFill').style.width = (S.xp / xpNeed(S.level) * 100) + '%'; $('lvl').textContent = S.level; $('coins').textContent = S.coins;
+  $('xpFill').style.width = (S.xp / xpNeed(S.level) * 100) + '%'; $('lvl').textContent = String(S.level); $('coins').textContent = String(S.coins);
   const o = currentObjective(); $('objective').style.display = o ? 'block' : 'none'; if (o) { $('objTitle').textContent = o.name; $('objText').textContent = o.text; }
   const pr = $('prompt'); if (nearInteract && MODE === 'play' && !cine) { pr.style.display = 'flex'; $('promptText').textContent = nearInteract._l; } else pr.style.display = 'none';
   $('slotSword').classList.toggle('on', S.weapon === 'sword'); $('slotBow').classList.toggle('on', S.weapon === 'bow'); $('slotBow').classList.toggle('locked', !S.hasBow); $('slotEmber').classList.toggle('locked', !S.ember);
-  $('slotEmber').classList.toggle('cool', PL.emberCd > 0 || S.mp < 18); $('arrowsN').textContent = S.hasBow ? (G.inv.arrow || 0) : '–'; $('potN').textContent = G.inv.potion || 0; $('slotPot').classList.toggle('cool', !G.inv.potion);
+  $('slotEmber').classList.toggle('cool', PL.emberCd > 0 || S.mp < 18); $('arrowsN').textContent = S.hasBow ? String(G.inv.arrow || 0) : '–'; $('potN').textContent = String(G.inv.potion || 0); $('slotPot').classList.toggle('cool', !G.inv.potion);
   $('cross').classList.toggle('aim', S.weapon === 'bow'); $('cross').classList.toggle('draw', PL.draw > 0.15); $('cross').classList.toggle('lock', !!PL.lock);
   const bb = $('bossBar'); if (bossFight && boss && boss.alive && boss.state !== 'wake') { bb.style.display = 'block'; $('bossFill').style.width = (boss.hp / boss.def.hp * 100) + '%'; bb.classList.toggle('exposed', boss.state === 'stun'); bb.classList.toggle('rage', boss.phase === 2); } else bb.style.display = 'none';
   const hh = Math.floor(G.time * 24), mm = Math.floor((G.time * 24 - hh) * 6) * 10; $('region').textContent = regionName(); $('clock').textContent = (hh < 10 ? '0' : '') + hh + ':' + (mm < 10 ? '0' : '') + mm + (weather.raining ? ', rain' : ''); $('dayIcon').className = nightAmt > 0.5 ? 'moon' : 'sun';

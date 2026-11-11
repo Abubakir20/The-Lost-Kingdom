@@ -1,6 +1,6 @@
 /* ============ main: audio, input, menus, loop ============ */
 /* ---------- audio (all synthesized with the Web Audio API) ---------- */
-const AU = { ctx: null, beat: 0, step: 0, bar: 0 };
+const AU: AudioState = { ctx: null, beat: 0, step: 0, bar: 0 };
 function audioInit() {
   if (AU.ctx) { if (AU.ctx.state === 'suspended') AU.ctx.resume(); return; }
   try {
@@ -15,13 +15,13 @@ function audioInit() {
 }
 function loopNoise(freq, q, type) { const c = AU.ctx, s = c.createBufferSource(); s.buffer = AU.noise; s.loop = true; const f = c.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q; const g = c.createGain(); g.gain.value = 0; s.connect(f); f.connect(g); g.connect(AU.sfx); s.start(); return g; }
 function applyVolume() { if (!AU.ctx) return; AU.master.gain.value = SETTINGS.master; AU.mus.gain.value = SETTINGS.music; AU.sfx.gain.value = SETTINGS.sfx; }
-function tone(f, dur, type, vol, dest, delay, slide) {
+function tone(f, dur, type, vol, dest?, delay?, slide?) {
   if (!AU.ctx) return; const c = AU.ctx, t = c.currentTime + (delay || 0), o = c.createOscillator(), g = c.createGain();
   o.type = type || 'sine'; o.frequency.setValueAtTime(f, t); if (slide) o.frequency.exponentialRampToValueAtTime(slide, t + dur);
   g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + Math.min(0.02, dur * 0.3)); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
   o.connect(g); g.connect(dest || AU.sfx); o.start(t); o.stop(t + dur + 0.05);
 }
-function nz(dur, vol, freq, type, delay, slide) {
+function nz(dur, vol, freq, type?, delay?, slide?) {
   if (!AU.ctx) return; const c = AU.ctx, t = c.currentTime + (delay || 0), s = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
   s.buffer = AU.noise; f.type = type || 'bandpass'; f.frequency.setValueAtTime(freq, t); if (slide) f.frequency.exponentialRampToValueAtTime(slide, t + dur);
   g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); s.connect(f); f.connect(g); g.connect(AU.sfx); s.start(t, Math.random()); s.stop(t + dur + 0.05);
@@ -116,7 +116,7 @@ function setMode(m) {
     mouse.l = mouse.r = false; PL.hold = -1; PL.draw = -1; for (const k in keys) keys[k] = false;
     try { if (document.pointerLockElement && document.exitPointerLock) document.exitPointerLock(); } catch (e) { /* ignore */ }
   }
-  if (m === 'menu') { const s = readSave(); $('btnContinue').disabled = !s; $('btnNew').textContent = 'New game'; $('btnNew').dataset.confirm = ''; $('saveInfo').textContent = s ? 'Saved journey: level ' + s.p.level + ', ' + Math.floor(s.playTime / 60) + ' min played' : 'No saved journey yet'; }
+  if (m === 'menu') { const s = readSave(); $<HTMLButtonElement>('btnContinue').disabled = !s; $('btnNew').textContent = 'New game'; $('btnNew').dataset.confirm = ''; $('saveInfo').textContent = s ? 'Saved journey: level ' + s.p.level + ', ' + Math.floor(s.playTime / 60) + ' min played' : 'No saved journey yet'; }
 }
 function lockPointer() { try { const r = canvas.requestPointerLock && canvas.requestPointerLock(); if (r && r.catch) r.catch(() => { }); } catch (e) { /* drag fallback */ } }
 document.addEventListener('pointerlockchange', () => { const was = plocked; plocked = document.pointerLockElement === canvas; if (was && !plocked && MODE === 'play') setMode('pause'); });
@@ -125,7 +125,7 @@ function startGame(state, fresh) {
   fade(() => { setMode('play'); if (fresh) { banner('Greenwind Valley', 'The Lost Kingdom'); notify('Move with W A S D. Look with the mouse. Press E near the glowing spirit.'); } else notify('Journey resumed.'); });
 }
 $('btnNew').onclick = () => { const b = $('btnNew'); if (readSave() && !b.dataset.confirm) { b.dataset.confirm = '1'; b.textContent = 'Erase the saved journey and begin again'; return; } startGame(newState(), true); };
-$('btnContinue').onclick = () => { const s = readSave(); if (!s) { $('saveInfo').textContent = 'The save could not be read. Start a new game.'; $('btnContinue').disabled = true; return; } startGame(s, false); };
+$('btnContinue').onclick = () => { const s = readSave(); if (!s) { $('saveInfo').textContent = 'The save could not be read. Start a new game.'; $<HTMLButtonElement>('btnContinue').disabled = true; return; } startGame(s, false); };
 $('btnSettings').onclick = () => openSettings('menu');
 $('btnCredits').onclick = () => { audioInit(); setMode('credits'); };
 $('btnCreditsBack').onclick = () => setMode('menu');
@@ -137,12 +137,12 @@ $('btnRespawn').onclick = respawn;
 $('btnEnd').onclick = () => setMode('play');
 function openSettings(back) {
   settingsBack = back; audioInit();
-  $('setMaster').value = SETTINGS.master; $('setMusic').value = SETTINGS.music; $('setSfx').value = SETTINGS.sfx; $('setSens').value = SETTINGS.sens; $('setQuality').value = SETTINGS.quality; $('setInvert').checked = SETTINGS.invertY;
+  $<HTMLInputElement>('setMaster').value = String(SETTINGS.master); $<HTMLInputElement>('setMusic').value = String(SETTINGS.music); $<HTMLInputElement>('setSfx').value = String(SETTINGS.sfx); $<HTMLInputElement>('setSens').value = String(SETTINGS.sens); $<HTMLSelectElement>('setQuality').value = SETTINGS.quality; $<HTMLInputElement>('setInvert').checked = SETTINGS.invertY;
   setMode('settings');
 }
 $('settings').addEventListener('input', () => {
-  SETTINGS.master = +$('setMaster').value; SETTINGS.music = +$('setMusic').value; SETTINGS.sfx = +$('setSfx').value; SETTINGS.sens = +$('setSens').value; SETTINGS.invertY = $('setInvert').checked;
-  const q = $('setQuality').value; if (q !== SETTINGS.quality) { SETTINGS.quality = q; applyQuality(); }
+  SETTINGS.master = +$<HTMLInputElement>('setMaster').value; SETTINGS.music = +$<HTMLInputElement>('setMusic').value; SETTINGS.sfx = +$<HTMLInputElement>('setSfx').value; SETTINGS.sens = +$<HTMLInputElement>('setSens').value; SETTINGS.invertY = $<HTMLInputElement>('setInvert').checked;
+  const q = $<HTMLSelectElement>('setQuality').value; if (q !== SETTINGS.quality) { SETTINGS.quality = q; applyQuality(); }
   applyVolume(); saveSettings();
 });
 $('btnSettingsBack').onclick = () => setMode(settingsBack);
@@ -213,7 +213,8 @@ function updateLife(dt, t) {
 /* ---------- loop ---------- */
 let lastT = performance.now(), menuAng = 0.6, interT = 0, saveT = 60, smokeT = 0;
 const _focus = new T.Vector3();
-function frame(now) {
+let loopFailed = false;
+function frame(now: number) {
   requestAnimationFrame(frame);
   const raw = Math.min(0.05, Math.max(0.001, (now - lastT) / 1000)); lastT = now;
   let dt = raw * timeScale; if (hitStop > 0) { hitStop -= raw; dt *= 0.05; }
@@ -256,7 +257,7 @@ function frame(now) {
     }
     updateHUD(raw); updateAudio(raw);
     POST.render();
-  } catch (err) { console.error(err); if (!frame.failed) { frame.failed = true; notify('Something went wrong in the game loop. Your last save is safe.'); } }
+  } catch (err) { console.error(err); if (!loopFailed) { loopFailed = true; notify('Something went wrong in the game loop. Your last save is safe.'); } }
 }
 
 /* ---------- boot ---------- */

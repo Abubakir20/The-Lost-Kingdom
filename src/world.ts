@@ -1,6 +1,6 @@
 /* ============ world: renderer, materials, sky, terrain, water, vegetation ============ */
-const canvas = $('game');
-let renderer;
+const canvas = $<HTMLCanvasElement>('game');
+let renderer: THREE.WebGLRenderer;
 try { renderer = new T.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' }); }
 catch (e) { $('fatal').style.display = 'flex'; throw e; }
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap;
@@ -12,11 +12,11 @@ const sun = new T.DirectionalLight(0xfff2d6, 0.8); scene.add(sun); scene.add(sun
 sun.castShadow = true; sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.05; sun.shadow.radius = 2.5;
 { const c = sun.shadow.camera; c.left = -52; c.right = 52; c.top = 52; c.bottom = -52; c.near = 10; c.far = 340; }
 
-const circles = [], boxes = [];
-const addCircle = (x, z, r, top) => { const c = { x, z, r, on: true, top }; circles.push(c); return c; };   // top: world height of a surface you can stand on
-const addBox = (x0, x1, z0, z1, top) => { const b = { x0: Math.min(x0, x1), x1: Math.max(x0, x1), z0: Math.min(z0, z1), z1: Math.max(z0, z1), on: true, top }; boxes.push(b); return b; };
-let hitTop = null;   // lowest standable top touched by the last resolveCollide that was given a height
-function resolveCollide(p, r, y) {
+const circles: CircleCollider[] = [], boxes: BoxCollider[] = [];
+const addCircle = (x: number, z: number, r: number, top?: number) => { const c: CircleCollider = { x, z, r, on: true, top }; circles.push(c); return c; };   // top: world height of a surface you can stand on
+const addBox = (x0: number, x1: number, z0: number, z1: number, top?: number) => { const b: BoxCollider = { x0: Math.min(x0, x1), x1: Math.max(x0, x1), z0: Math.min(z0, z1), z1: Math.max(z0, z1), on: true, top }; boxes.push(b); return b; };
+let hitTop: number | null = null;   // lowest standable top touched by the last resolveCollide that was given a height
+function resolveCollide(p: { x: number; z: number }, r: number, y?: number) {
   hitTop = null;
   for (let i = 0; i < circles.length; i++) {
     const c = circles[i]; if (!c.on) continue;
@@ -37,13 +37,13 @@ function resolveCollide(p, r, y) {
   }
 }
 /* highest standable top under a point, counting only tops at or below the feet (never snaps up from underneath) */
-function platformAt(x, z, y) {
+function platformAt(x: number, z: number, y: number): number {
   let h = -1e9; const pad = 0.25;
   for (let i = 0; i < circles.length; i++) { const c = circles[i]; if (c.top === undefined || !c.on || c.top > y + 0.35 || c.top <= h) continue; const dx = x - c.x, dz = z - c.z, m = c.r + pad; if (dx * dx + dz * dz < m * m) h = c.top; }
   for (let i = 0; i < boxes.length; i++) { const b = boxes[i]; if (b.top === undefined || !b.on || b.top > y + 0.35 || b.top <= h) continue; if (x > b.x0 - pad && x < b.x1 + pad && z > b.z0 - pad && z < b.z1 + pad) h = b.top; }
   return h;
 }
-function insideBox(x, z, pad) {
+function insideBox(x: number, z: number, pad: number): boolean {
   for (let i = 0; i < boxes.length; i++) { const b = boxes[i]; if (b.on && x > b.x0 - pad && x < b.x1 + pad && z > b.z0 - pad && z < b.z1 + pad) return true; }
   return false;
 }
@@ -51,23 +51,23 @@ function insideBox(x, z, pad) {
 /* ---------- materials: cel shading with a soft three-band ramp ---------- */
 const TOON = (() => { const v = [46, 46, 96, 170, 236, 255], d = new Uint8Array(24); v.forEach((s, i) => { d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = s; d[i * 4 + 3] = 255; }); const t = new T.DataTexture(d, 6, 1, T.RGBAFormat); t.minFilter = t.magFilter = T.NearestFilter; t.generateMipmaps = false; t.needsUpdate = true; return t; })();
 const _mats = {};
-const lam = (c, o) => { const k = 'l' + c + (o ? JSON.stringify(o) : ''); return _mats[k] || (_mats[k] = new T.MeshToonMaterial(Object.assign({ color: c, gradientMap: TOON }, o))); };
-const glowMat = (c, o) => { const k = 'g' + c + (o ? JSON.stringify(o) : ''); return _mats[k] || (_mats[k] = new T.MeshBasicMaterial(Object.assign({ color: c }, o))); };
-function mesh(geo, material, x, y, z, parent, noShadow) {
+const lam = (c: number, o?: THREE.MeshToonMaterialParameters): THREE.MeshToonMaterial => { const k = 'l' + c + (o ? JSON.stringify(o) : ''); return _mats[k] || (_mats[k] = new T.MeshToonMaterial(Object.assign({ color: c, gradientMap: TOON }, o))); };
+const glowMat = (c: number, o?: THREE.MeshBasicMaterialParameters): THREE.MeshBasicMaterial => { const k = 'g' + c + (o ? JSON.stringify(o) : ''); return _mats[k] || (_mats[k] = new T.MeshBasicMaterial(Object.assign({ color: c }, o))); };
+function mesh<M extends THREE.Material>(geo: THREE.BufferGeometry, material: M, x: number, y: number, z: number, parent?: THREE.Object3D, noShadow?: boolean): THREE.Mesh<THREE.BufferGeometry, M> {
   const m = new T.Mesh(geo, material); m.position.set(x, y, z);
   if (!noShadow) { m.castShadow = true; m.receiveShadow = true; }
   (parent || scene).add(m); return m;
 }
 const _geo = {};
-const bx = (w, h, d) => new T.BoxGeometry(w, h, d);
-const cyl = (rt, rb, h, s = 8) => new T.CylinderGeometry(rt, rb, h, s);
-const sph = (r, w = 10, h = 8) => new T.SphereGeometry(r, w, h);
+const bx = (w: number, h: number, d: number) => new T.BoxGeometry(w, h, d);
+const cyl = (rt: number, rb: number, h: number, s = 8) => new T.CylinderGeometry(rt, rb, h, s);
+const sph = (r: number, w = 10, h = 8) => new T.SphereGeometry(r, w, h);
 const STONE = 0x929b93, STONE_D = 0x717d77, MOSS = 0x6f9a45, RUNE = 0x7ff3e0, GOLD = 0xe8c36a, TIMBER = 0x6e4226;
 function makeCanvas(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
 const glowTex = (() => { const c = makeCanvas(64, 64), x = c.getContext('2d'), g = x.createRadialGradient(32, 32, 0, 32, 32, 32); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.25, 'rgba(255,255,255,.55)'); g.addColorStop(0.6, 'rgba(255,255,255,.12)'); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.fillRect(0, 0, 64, 64); return new T.CanvasTexture(c); })();
 const nightHalos = [];
 /* soft additive glow; night=true makes it fade in after dusk */
-function halo(parent, x, y, z, size, color, op = 0.55, night) {
+function halo(parent, x, y, z, size, color, op = 0.55, night?) {
   const s = new T.Sprite(new T.SpriteMaterial({ map: glowTex, color, transparent: true, opacity: night ? 0 : op, blending: T.AdditiveBlending, depthWrite: false }));
   s.position.set(x, y, z); s.scale.set(size, size, 1); (parent || scene).add(s); if (night) { s.userData.op = op; nightHalos.push(s); } return s;
 }
@@ -90,10 +90,10 @@ function bake(group, shadow = true) {
 }
 
 /* ---------- painted textures (generated for the game, embedded as data URIs) ---------- */
-const PAINT = {};
+const PAINT: Record<string, PaintedTexture> = {};
 function paintTex(name) {
   if (PAINT[name]) return PAINT[name];
-  const src = (window.TLK_TEX || {})[name], img = new Image(), t = new T.Texture(img), gain = new T.Vector3(1, 1, 1);
+  const src = (window.TLK_TEX || {})[name], img = new Image(), t = new T.Texture(img) as PaintedTexture, gain = new T.Vector3(1, 1, 1);
   t.wrapS = t.wrapT = T.RepeatWrapping; t.anisotropy = 8; t.triGain = gain;
   if (src) {
     img.onload = () => {
@@ -109,7 +109,7 @@ function paintTex(name) {
   return (PAINT[name] = t);
 }
 /* triplanar texturing in object space (static scenery is baked in world space, so it lines up; moving characters keep their texture); mode 'roof' projects along X so tile rows follow the eaves */
-function painted(mat, name, scale, amount = 0.9, o = {}) {
+function painted(mat: THREE.Material, name: string, scale: number, amount = 0.9, o: PaintOptions = {}) {
   if (mat.userData.painted) return mat;
   const tex = paintTex(name), tex2 = o.side ? paintTex(o.side) : null;
   mat.userData.painted = name;
@@ -238,7 +238,7 @@ function updateSky(time, focus) {
   sy = Math.max(sy, 0.24); const l = Math.hypot(sx, sy, sz); sx /= l; sy /= l; sz /= l;
   sun.position.set(focus.x + sx * 140, focus.y + sy * 140, focus.z + sz * 140); sun.target.position.copy(focus);
   stars.material.opacity = nightAmt * (1 - rainAmt) * (0.75 + 0.25 * Math.sin(time * 9000)); stars.position.copy(camera.position); sky.position.copy(camera.position);
-  scene.fog.near = lerp(lerp(a[7], b[7], t), 14, rainAmt); scene.fog.far = lerp(QUALITY.fog, 190, rainAmt);
+  (scene.fog as THREE.Fog).near = lerp(lerp(a[7], b[7], t), 14, rainAmt); (scene.fog as THREE.Fog).far = lerp(QUALITY.fog, 190, rainAmt);
   if (skyU.pano.value) { skyU.panoTint.value.copy(sun.color).lerp(_c1.setHex(0xffffff), 0.55).multiplyScalar(lerp(1, 0.2, nightAmt)); if (nightAmt > 0.01) skyU.panoTint.value.lerp(_c1.setRGB(0.1, 0.14, 0.3), nightAmt * 0.6); skyU.panoAmt.value = 1 - rainAmt * 0.75; for (let k = 0; k < clouds.length; k++) clouds[k].visible = false; }
   waterU.uSky.value.copy(skyU.bot.value); waterU.uDay.value = 1 - nightAmt * 0.8; { const k = 1 - nightAmt * 0.72 - rainAmt * 0.25; waterU.uShallow.value.setRGB(0.42 * k, 0.84 * k, 0.74 * k); waterU.uDeep.value.setRGB(0.10 * k, 0.50 * k, 0.60 * k); water.userData.far.material.color.setRGB(0.18 * k, 0.58 * k, 0.7 * k); }
   // clouds and far ranges take on the colour of the hour
@@ -340,7 +340,7 @@ const mapCanvas = (() => {
 
 /* ---------- chunked instancing: every cell is frustum- and distance-culled ---------- */
 const chunkSets = [];
-function chunked(geo, mat, items, cell, o = {}) {
+function chunked(geo: THREE.BufferGeometry, mat: THREE.Material, items: any[], cell: number, o: ChunkOptions = {}) {
   const buckets = new Map(), dummy = new T.Object3D(), col = new T.Color();
   for (const it of items) { const k = Math.floor((it.x + WORLD) / cell) + ',' + Math.floor((it.z + WORLD) / cell); if (!buckets.has(k)) buckets.set(k, []); buckets.get(k).push(it); }
   geo.boundingSphere = new T.Sphere(new T.Vector3(0, o.cy || 6, 0), cell * 0.71 + (o.extent || 4));
@@ -362,7 +362,7 @@ function updateChunks(dt, cam) {
   chunkT -= dt; if (chunkT > 0) return; chunkT = 0.25;
   for (const s of chunkSets) { if (!s.dist) continue; const lim = s.dist * (s.grass ? QUALITY.veg / 115 : 1); for (const m of s.meshes) m.visible = Math.hypot(m.userData.cx - cam.x, m.userData.cz - cam.z) < lim; }
 }
-function windify(mat, amp, grassLike) {
+function windify(mat, amp, grassLike?) {
   mat.onBeforeCompile = sh => {
     sh.uniforms.uTime = windU;
     sh.vertexShader = 'uniform float uTime;\n' + sh.vertexShader.replace('#include <begin_vertex>',
@@ -376,7 +376,7 @@ function windify(mat, amp, grassLike) {
   return mat;
 }
 /* organic blob with smooth normals and a built-in light-to-dark gradient */
-function puffGeo(detail, rough, flat) {
+function puffGeo(detail, rough, flat?) {
   const g = new T.IcosahedronGeometry(1, detail), p = g.attributes.position, n = g.attributes.normal, c = new Float32Array(p.count * 3);
   for (let i = 0; i < p.count; i++) {
     const x = p.getX(i), y = p.getY(i), z = p.getZ(i), f = 1 + rough * (Math.sin(x * 3.1 + y * 1.7 + 1) * Math.cos(z * 2.9 - y * 2.1) + 0.5 * Math.sin(y * 5.3 + x * 4.1));
@@ -689,7 +689,7 @@ function applyQuality() {
   if (grass) { for (const m of grass.set.meshes) m.count = Math.max(1, Math.floor(m.userData.max * QUALITY.grass)); grass.count = Math.floor(grass.userData.max * QUALITY.grass); }
   POST.enable(QUALITY.post);
   sun.castShadow = QUALITY.shadow > 0;
-  if (QUALITY.shadow > 0 && sun.shadow.mapSize.x !== QUALITY.shadow) { sun.shadow.mapSize.set(QUALITY.shadow, QUALITY.shadow); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } }
+  if (QUALITY.shadow > 0 && sun.shadow.mapSize.x !== QUALITY.shadow) { sun.shadow.mapSize.set(QUALITY.shadow, QUALITY.shadow); if (sun.shadow.map) { (sun.shadow.map as THREE.WebGLRenderTarget).dispose(); sun.shadow.map = null; } }
   onResize();
 }
 function onResize() {

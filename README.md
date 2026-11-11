@@ -32,15 +32,17 @@ An original 3D open-world fantasy adventure that runs in the browser. One self-c
 
 ```
 index.html        built game (generated, committed so it can be played directly)
-build.js          bundles src/ into index.html
+build.js          embeds the compiled script and the assets into index.html
+tsconfig.json     TypeScript project: every src/*.ts compiled, in order, into dist/game.js
 src/
-  core.js         terrain, items, state, save
-  world.js        renderer, materials, sky, water, vegetation, post-processing
-  scenery.js      village, temple, props
-  entities.js     characters, hero, weapons, camera, combat, enemies, boss
-  systems.js      quests, NPCs, shop, crafting
-  ui.js           HUD and panels
-  main.js         input and the frame loop
+  globals.d.ts    shared types: rig, hero, game state, colliders, NPCs, options
+  core.ts         terrain, items, state, save
+  world.ts        renderer, materials, sky, water, vegetation, post-processing
+  scenery.ts      village, temple, props
+  entities.ts     characters, hero, weapons, camera, combat, enemies, boss
+  systems.ts      quests, NPCs, shop, crafting
+  ui.ts           HUD and panels
+  main.ts         input and the frame loop
   template.html   page shell and styles
   tex/ art/       painted textures and key art
   hero3d/         hero mesh (packed binary) and texture
@@ -49,13 +51,19 @@ tools/
   shot.js         screenshot helper
 ```
 
+The sources are TypeScript written as plain scripts that share one global scope (no imports); `tsc` joins them into a single file. three.js stays a CDN global, typed through `@types/three`.
+
 ## Build and test
 
 ```
-node build.js            # writes index.html
-npm i playwright         # once, for the tools
-node tools/test.js       # runs the playthrough checks against index.html
+npm install              # typescript, three types
+npm run typecheck        # tsc --noEmit
+npm run build            # tsc, then build.js writes index.html
+npm i -D playwright      # once, for the tools
+npm test                 # runs the 71 playthrough checks against index.html
 ```
+
+Type coverage: the project compiles with no errors under the default checks. The shared data structures and the core helpers are typed; many function parameters are still implicitly `any` (`noImplicitAny` is off, about 660 places to annotate before it can be turned on).
 
 ## Credits
 

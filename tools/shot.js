@@ -1,7 +1,7 @@
 // node shot.js jobs.json — job: {js, wait, js2, wait2, out, w, h}; shared helper for tests too
 const { chromium } = require('playwright'); const fs = require('fs');
 async function open(w = 1120, h = 630) {
-  const three = fs.readFileSync(__dirname + '/node_modules/three/build/three.min.js', 'utf8');
+  const three = fs.readFileSync(__dirname + '/../node_modules/three/build/three.min.js', 'utf8');
   let html = fs.readFileSync(process.env.TLK_HTML || require('path').join(__dirname, '..', 'index.html'), 'utf8');
   html = html.replace(/<script src="https:\/\/cdnjs[^"]*"><\/script>/, () => '<script>' + three + '</script>').replace(/<link rel="stylesheet"[^>]*>/, '');
   fs.writeFileSync(__dirname + '/_test.html', html);

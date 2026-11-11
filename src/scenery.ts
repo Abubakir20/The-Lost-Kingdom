@@ -1,13 +1,13 @@
 /* ============ scenery: shrine, bridge, Oakrest, ruins, Veilfall, the Temple of Echoes ============ */
 const STATIC = new T.Group(); scene.add(STATIC);
-function grpAt(x, y, z, ry = 0, par = STATIC) { const g = new T.Group(); g.position.set(x, y, z); g.rotation.y = ry; par.add(g); return g; }
+function grpAt(x: number, y: number, z: number, ry = 0, par: THREE.Object3D = STATIC) { const g = new T.Group(); g.position.set(x, y, z); g.rotation.y = ry; par.add(g); return g; }
 const VINE = 0x4f8a3a, PLASTER = 0xf4e8cc, chimneys = [], banners = [];
 // painted surfaces: every cached stone, plaster and timber material picks up a generated texture
 for (const c of [STONE, STONE_D, 0x8e918b, 0x777b76, 0x9a9d97, 0xb9bfb3, 0xa4ada4, 0x717d77]) painted(lam(c), 'stone', 0.3, 0.9);
 painted(lam(PLASTER), 'plaster', 0.3, 0.85);
 for (const c of [TIMBER, 0x7a4a2a, 0x8a5a30, 0xa8743c, 0x9a6a3c, 0xb07c44, 0x8a6a44, 0x5a3d28, 0x6b4a30, 0x5f432c, 0xb88a54]) painted(lam(c), 'wood', 0.55, 0.7);
 
-function pillar(x, z, h, r = 0.6, collide = true, broken) {
+function pillar(x, z, h, r = 0.6, collide = true, broken?) {
   const g = grpAt(x, groundAt(x, z), z, rng() * 6.283);
   mesh(bx(r * 3.1, 0.3, r * 3.1), lam(STONE_D), 0, 0.15, 0, g); mesh(bx(r * 2.5, 0.32, r * 2.5), lam(STONE), 0, 0.46, 0, g);
   mesh(cyl(r * 0.84, r, h, 10), lam(STONE), 0, 0.62 + h / 2, 0, g);
@@ -69,11 +69,11 @@ function fence(x0, z0, x1, z1, collide = true) {
   for (const h of [0.45, 0.9]) mesh(horiz ? bx(len, 0.1, 0.07) : bx(0.07, 0.1, len), wood, mx, my + h, mz, STATIC);
   if (collide) addBox(Math.min(x0, x1) - 0.15, Math.max(x0, x1) + 0.15, Math.min(z0, z1) - 0.15, Math.max(z0, z1) + 0.15, Math.min(Math.abs(x1 - x0), Math.abs(z1 - z0)) < 0.5 ? my + 1.12 : undefined);
 }
-function barrel(x, z, par) { const y = groundAt(x, z); mesh(cyl(0.42, 0.38, 1, 10), lam(0x8a5a30), x, y + 0.5, z, par || STATIC); for (const h of [0.22, 0.78]) mesh(cyl(0.44, 0.44, 0.07, 10), lam(0x4a4f57), x, y + h, z, par || STATIC); }
+function barrel(x, z, par?) { const y = groundAt(x, z); mesh(cyl(0.42, 0.38, 1, 10), lam(0x8a5a30), x, y + 0.5, z, par || STATIC); for (const h of [0.22, 0.78]) mesh(cyl(0.44, 0.44, 0.07, 10), lam(0x4a4f57), x, y + h, z, par || STATIC); }
 function crate(x, z, s = 0.9) { const y = groundAt(x, z), c = mesh(bx(s, s, s), lam(0xb07c44), x, y + s / 2, z, STATIC); c.rotation.y = rng(); mesh(bx(s * 1.04, s * 0.12, s * 1.04), lam(0x8a5a30), x, y + s * 0.5, z, STATIC).rotation.y = c.rotation.y; }
 
 /* a timber-framed Oakrest house */
-function house(x, z, w, d, roofC, dz, o = {}) {
+function house(x: number, z: number, w: number, d: number, roofC: number, dz: number, o: HouseOptions = {}) {
   const y = groundAt(x, z), g = grpAt(x, y - 0.1, z), beam = lam(TIMBER), wh = o.h || 3.2, f = 0.85, plaster = lam(o.plaster || PLASTER);
   mesh(bx(w + 0.35, f, d + 0.35), lam(0x8e918b), 0, f / 2, 0, g);
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) mesh(bx(0.55, f + 0.12, 0.55), lam(0x777b76), sx * (w / 2 + 0.1), f / 2 + 0.03, sz * (d / 2 + 0.1), g);
@@ -305,7 +305,7 @@ const waterfall = (() => {
 })();
 
 /* ---------- Temple of Echoes ---------- */
-const gates = {}, temple = {};
+const gates: Record<string, any> = {}, temple: Record<string, any> = {};
 function wallBox(x0, x1, z0, z1, h = 7, collide = true) {
   const w = Math.abs(x1 - x0), d = Math.abs(z1 - z0), cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, long = Math.max(w, d), alongX = w > d;
   mesh(bx(w, h, d), lam(STONE), cx, 3 + h / 2, cz, STATIC); mesh(bx(w + 0.35, 0.8, d + 0.35), lam(STONE_D), cx, 3.4, cz, STATIC); mesh(bx(w + 0.3, 0.3, d + 0.3), lam(STONE_D), cx, 3 + h - 0.6, cz, STATIC);

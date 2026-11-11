@@ -1,8 +1,9 @@
-// Builds the single self-contained index.html from the modules and assets in src/.
-// Usage: node build.js
+// Builds the single self-contained index.html from the compiled game script and the assets in src/.
+// Usage: npm run build   (tsc, then this script)
 const fs = require('fs');
-const MODULES = ['core', 'world', 'scenery', 'entities', 'systems', 'ui', 'main'];
-const js = MODULES.map(f => fs.readFileSync('src/' + f + '.js', 'utf8')).join('\n');
+// dist/game.js is the TypeScript output: every src/*.ts compiled, in order, into one script (run `npx tsc` or `npm run build`)
+if (!fs.existsSync('dist/game.js')) { console.error('dist/game.js is missing: run `npx tsc` first (or `npm run build`)'); process.exit(1); }
+const js = fs.readFileSync('dist/game.js', 'utf8');
 const b64 = p => fs.readFileSync(p).toString('base64');
 
 // painted textures and key art are embedded so the page needs no other files

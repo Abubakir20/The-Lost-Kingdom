@@ -1,18 +1,18 @@
 'use strict';
 /* ============ THE LOST KINGDOM — core: utils, terrain, data, state ============ */
 const T = THREE;
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const lerp = (a, b, t) => a + (b - a) * t;
-const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
-const rand = (a, b) => a + Math.random() * (b - a);
-const angLerp = (a, b, t) => { const d = ((b - a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI; return a + d * clamp(t, 0, 1); };
-function mulberry(seed) { return function () { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+const smooth = (a: number, b: number, x: number) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const rand = (a: number, b: number) => a + Math.random() * (b - a);
+const angLerp = (a: number, b: number, t: number) => { const d = ((b - a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI; return a + d * clamp(t, 0, 1); };
+function mulberry(seed: number): () => number { return function () { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 const rng = mulberry(20261110);
-const $ = id => document.getElementById(id);
+const $ = <E extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as E;
 
 /* ---------- world layout ---------- */
 const WORLD = 220, LIMIT = 203, WATER_Y = -1;
-const riverX = z => -40 + 18 * Math.sin(z * 0.025);
+const riverX = (z: number) => -40 + 18 * Math.sin(z * 0.025);
 const BRIDGE = { z: 10, x: riverX(10), half: 15, w: 2.6, y: 1.0 };
 const TP = { x0: -162, x1: -78, z0: -56, z1: -24, zc: -40 };          // temple footprint
 const MESA = { x: 40, z: -95, top: 14 };
@@ -28,7 +28,7 @@ const ISLETS = [
   { x: riverX(-80), z: -80, h: -0.55, r: 2.6, b: 4 },   // drowned islet
   { x: -25, z: -164, h: -0.5, r: 4.5, b: 4 },           // hollow behind the waterfall
 ];
-function terrainH(x, z) {
+function terrainH(x: number, z: number): number {
   let h = 3 + 3 * Math.sin(x * 0.021) * Math.cos(z * 0.023) + 1.6 * Math.sin(x * 0.052 + 1.3) * Math.sin(z * 0.047 + 0.7)
     + 0.5 * Math.sin(x * 0.13 + z * 0.05) * Math.cos(z * 0.11);
   const d = Math.hypot(x, z);
@@ -47,19 +47,19 @@ function terrainH(x, z) {
   }
   return h;
 }
-function groundAt(x, z) {
+function groundAt(x: number, z: number): number {
   let h = terrainH(x, z);
   if (Math.abs(z - BRIDGE.z) < BRIDGE.w && Math.abs(x - BRIDGE.x) < BRIDGE.half) h = Math.max(h, BRIDGE.y);
   return h;
 }
-const inTemple = (x, z, pad = 0) => x > TP.x0 - pad && x < TP.x1 + pad && z > TP.z0 - pad && z < TP.z1 + pad;
+const inTemple = (x: number, z: number, pad = 0) => x > TP.x0 - pad && x < TP.x1 + pad && z > TP.z0 - pad && z < TP.z1 + pad;
 
 const PATHS = [
   [[0, 60], [30, 42], [52, 22], [78, 20]],
   [[0, 60], [-14, 28], [-20, 10], [-51, 10], [-64, -14], [-76, -40]],
   [[78, 20], [60, -30], [46, -74]],
 ];
-function pathDist(x, z) {
+function pathDist(x: number, z: number): number {
   let best = 1e9;
   for (const p of PATHS) for (let i = 0; i < p.length - 1; i++) {
     const ax = p[i][0], az = p[i][1], bx = p[i + 1][0], bz = p[i + 1][1];
@@ -134,7 +134,7 @@ const LOCS = [
 
 /* ---------- state ---------- */
 const SAVE_KEY = 'tlk_save_v1', SET_KEY = 'tlk_settings_v1';
-function newState() {
+function newState(): GameState {
   return {
     v: 1, time: 0.32, playTime: 0,
     p: { x: 0, y: 3.2, z: 66, yaw: Math.PI, hp: 100, maxHp: 100, st: 100, maxSt: 100, mp: 50, maxMp: 50, level: 1, xp: 0, coins: 15,
@@ -163,6 +163,6 @@ function readSave() {
 function writeSave() {
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(G)); return true; } catch (e) { return false; }
 }
-const has = (id, n = 1) => (G.inv[id] || 0) >= n;
-const xpNeed = lv => 60 + (lv - 1) * 45;
+const has = (id: string, n = 1) => (G.inv[id] || 0) >= n;
+const xpNeed = (lv: number) => 60 + (lv - 1) * 45;
 const swordDmg = () => 14 + 6 * G.p.swordLv + (G.p.level - 1);

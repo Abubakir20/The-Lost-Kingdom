@@ -2,9 +2,9 @@
 const HG = { torso: cyl(0.265, 0.195, 0.58, 12), pelvis: cyl(0.2, 0.215, 0.22, 12), neck: cyl(0.06, 0.075, 0.16, 8), head: sph(0.265, 16, 12), eye: sph(0.04, 6, 5), ear: sph(0.06, 6, 5),
   uarm: cyl(0.076, 0.066, 0.32, 10), farm: cyl(0.064, 0.054, 0.3, 10), hand: sph(0.07, 8, 6), sho: sph(0.095, 10, 8), thigh: cyl(0.105, 0.085, 0.44, 10), shin: cyl(0.08, 0.064, 0.42, 10), boot: bx(0.15, 0.14, 0.3), knee: sph(0.086, 8, 6),
   hair: new T.SphereGeometry(0.285, 12, 9, 0, Math.PI * 2, 0, Math.PI * 0.56), robe: new T.CylinderGeometry(0.215, 0.42, 0.92, 12, 1, true), skirt: new T.CylinderGeometry(0.22, 0.36, 0.4, 12, 1, true) };
-const grpIn = (par, x, y, z) => { const n = new T.Group(); n.position.set(x, y, z); par.add(n); return n; };
-function humanoid(o) {
-  const g = new T.Group(), p = {}, skin = lam(o.skin), top = lam(o.top), sleeve = lam(o.sleeve || o.top), bot = lam(o.bottom), boot = lam(o.boot || 0x4a3526);
+const grpIn = (par: THREE.Object3D, x: number, y: number, z: number) => { const n = new T.Group(); n.position.set(x, y, z); par.add(n); return n; };
+function humanoid(o: HumanoidLook): Humanoid {
+  const g = new T.Group(), p = {} as Rig, skin = lam(o.skin), top = lam(o.top), sleeve = lam(o.sleeve || o.top), bot = lam(o.bottom), boot = lam(o.boot || 0x4a3526);
   p.pivot = grpIn(g, 0, 0.9, 0); p.hips = grpIn(p.pivot, 0, -0.9, 0);
   mesh(HG.pelvis, bot, 0, 0.9, 0, p.hips);
   p.chest = grpIn(p.hips, 0, 0.95, 0);
@@ -23,7 +23,7 @@ function humanoid(o) {
   else if (o.hat === 'helm') { mesh(new T.SphereGeometry(0.3, 12, 8, 0, 6.3, 0, 1.75), lam(0x8a929a), 0, 0.03, 0, p.head); mesh(bx(0.05, 0.3, 0.06), lam(0x8a929a), 0, -0.02, 0.28, p.head); mesh(new T.ConeGeometry(0.05, 0.22, 6), lam(0xc8452f), 0, 0.42, 0, p.head); }
   else if (o.hat === 'hood') { mesh(new T.SphereGeometry(0.33, 12, 9, 0, 6.3, 0, 2.2), lam(o.top), 0, 0.03, -0.04, p.head); mesh(new T.ConeGeometry(0.16, 0.36, 8), lam(o.top), 0, 0.22, -0.26, p.head).rotation.x = -1.9; }
   else if (o.hat === 'cap') { mesh(new T.SphereGeometry(0.29, 10, 6, 0, 6.3, 0, 1.3), lam(o.hatC || 0x5a7a4a), 0, 0.06, 0, p.head); mesh(bx(0.3, 0.03, 0.2), lam(o.hatC || 0x5a7a4a), 0, 0.1, 0.3, p.head); }
-  for (const [k, s] of [['R', -1], ['L', 1]]) {
+  for (const [k, s] of [['R', -1], ['L', 1]] as [string, number][]) {
     const a = p['arm' + k] = grpIn(p.chest, s * 0.325, 0.47, 0);
     mesh(HG.sho, sleeve, 0, 0, 0, a); mesh(HG.uarm, sleeve, 0, -0.16, 0, a);
     const e = p['elbow' + k] = grpIn(a, 0, -0.32, 0); mesh(HG.farm, o.bare ? skin : sleeve, 0, -0.15, 0, e);
@@ -40,10 +40,10 @@ function humanoid(o) {
   g.scale.setScalar(o.s || 1);
   return { g, p };
 }
-const POSE_KEYS = ['aL', 'aR', 'zL', 'zR', 'eL', 'eR', 'lL', 'lR', 'kL', 'kR', 'bob', 'lean', 'tw', 'hy', 'hx'];
-const _P = {};
+const POSE_KEYS: (keyof Pose)[] = ['aL', 'aR', 'zL', 'zR', 'eL', 'eR', 'lL', 'lR', 'kL', 'kR', 'bob', 'lean', 'tw', 'hy', 'hx'];
+const _P = {} as Pose;
 /* procedural poses, blended over time so every change of state eases in */
-function animHumanoid(p, mode, t, dt, vy) {
+function animHumanoid(p: Rig, mode: string, t: number, dt: number, vy?: number) {
   const P = _P; for (const k of POSE_KEYS) P[k] = 0;
   P.eL = P.eR = -0.15; P.zL = 0.07; P.zR = -0.07;
   if (mode === 'walk' || mode === 'run') {
@@ -63,7 +63,7 @@ function animHumanoid(p, mode, t, dt, vy) {
   else if (mode === 'stagger') { P.lean = -0.42; P.aL = P.aR = -0.4; P.zL = 0.9; P.zR = -0.9; P.hx = -0.5; P.kL = P.kR = 0.4; P.bob = -0.05; }
   else { const b = Math.sin(t * 1.9); P.bob = b * 0.012; P.aL = b * 0.04; P.aR = -b * 0.04; P.zL = 0.09 + b * 0.015; P.zR = -0.09 - b * 0.015; P.hy = Math.sin(t * 0.55) * 0.28; P.eL = P.eR = -0.2; P.tw = Math.sin(t * 0.55) * 0.06; }
   P.lean += p.baseLean;
-  let A = p.a; if (!A) { A = p.a = {}; for (const k of POSE_KEYS) A[k] = P[k]; }
+  let A = p.a; if (!A) { A = p.a = {} as Pose; for (const k of POSE_KEYS) A[k] = P[k]; }
   const f = dt ? 1 - Math.exp(-(mode === 'windup' || mode === 'strike' ? 26 : 15) * dt) : 1;
   for (const k of POSE_KEYS) A[k] += (P[k] - A[k]) * f;
   const zb = p.zBias || 0; p.armL.rotation.set(A.aL, 0, A.zL + zb); p.armR.rotation.set(A.aR, 0, A.zR - zb); p.elbowL.rotation.x = A.eL; p.elbowR.rotation.x = A.eR;
@@ -78,7 +78,7 @@ function addOutline(g, th = 0.014) { const list = []; g.traverse(o => { if (o.is
 function ownMaterials(g) { const map = new Map(), list = []; g.traverse(o => { if (!o.isMesh || !o.material.emissive) return; let m = map.get(o.material); if (!m) { m = o.material.clone(); map.set(o.material, m); list.push(m); } o.material = m; }); return list; }
 
 /* ---------- the Warden (player) ---------- */
-const hero = humanoid({ skin: 0xd09a72, top: 0xf2ead8, bottom: 0x2f5d62, boot: 0x4a3526, belt: 0x8a5a30 });
+const hero = humanoid({ skin: 0xd09a72, top: 0xf2ead8, bottom: 0x2f5d62, boot: 0x4a3526, belt: 0x8a5a30 }) as Hero;
 scene.add(hero.g);
 {
   const p = hero.p, RED = 0xc8452f, TEAL = 0x2f6f7a, HAIR = 0xf0ece4, LEATHER = 0x8a5a30;
@@ -180,7 +180,7 @@ const HERO3D = (() => {
     hideIn(p.pivot);
     // joints move to where the sculpt actually bends
     p.head.position.set(0, 0.636, 0);
-    for (const [k, s] of [['R', -1], ['L', 1]]) {
+    for (const [k, s] of [['R', -1], ['L', 1]] as [string, number][]) {
       p['arm' + k].position.set(s * 0.186, 0.498, 0); p['elbow' + k].position.set(0, -0.285, 0); p['hand' + k].position.set(0, -0.36, 0);
       p['leg' + k].position.set(s * 0.1425, 0.874, -0.015); p['knee' + k].position.set(0, -0.418, 0);
     }
@@ -201,7 +201,7 @@ const HERO3D = (() => {
     mesh(cloth(0.24, 0.3, 0.3, 0.07 * 1.0), lam(0xc8452f), 0, 0, 0, lo); mesh(cloth(0.302, 0.31, 0.035, 0.07), lam(GOLD), 0, -0.292, 0.002, lo);
     addOutline(hero.cape, 0.011);
     for (const t of hero.tails) { t.position.set(t.userData.s * 0.06, 0.57, -0.14); t.scale.set(0.8, 0.8, 1); }
-    hero.quiver.position.set(-0.1, 0.3, -0.2); hero.shield.position.set(0.075, -0.15, 0); hero.shield.scale.setScalar(0.58); hero.shield.children[1].material = lam(0x6e4226); hero.sword.scale.setScalar(0.86);
+    hero.quiver.position.set(-0.1, 0.3, -0.2); hero.shield.position.set(0.075, -0.15, 0); hero.shield.scale.setScalar(0.58); (hero.shield.children[1] as THREE.Mesh).material = lam(0x6e4226); hero.sword.scale.setScalar(0.86);
     // bind in the sculpt's own A-pose
     const mat = new T.MeshToonMaterial({ color: 0xe9dcc4, gradientMap: TOON, skinning: true });
     const img = new Image(), tex = new T.Texture(img); tex.flipY = false; tex.anisotropy = 8;
@@ -209,7 +209,8 @@ const HERO3D = (() => {
     const body = new T.SkinnedMesh(geo, mat); body.castShadow = true; body.frustumCulled = false; hero.g.add(body);
     const bones = [p.hips, p.chest, p.head, p.armL, p.elbowL, p.armR, p.elbowR, p.legL, p.kneeL, p.legR, p.kneeR];
     p.armL.rotation.set(0, 0, 0.557); p.armR.rotation.set(0, 0, -0.557); hero.g.updateMatrixWorld(true);
-    const skel = new T.Skeleton(bones); body.bind(skel);
+    // the rig's joint groups stand in for bones; a skeleton only reads their world matrices
+    const skel = new T.Skeleton(bones as unknown as THREE.Bone[]); body.bind(skel);
     p.armL.rotation.set(0, 0, 0); p.armR.rotation.set(0, 0, 0);
     const om = new T.MeshBasicMaterial({ color: 0x33263a, side: T.BackSide, skinning: true });
     om.onBeforeCompile = sh => { sh.vertexShader = sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed += normalize(normal) * 0.0085;'); }; om.customProgramCacheKey = () => 'olSkin';
@@ -221,9 +222,10 @@ const PL = {
   pos: new T.Vector3(0, 3.2, 66), vel: new T.Vector3(), yaw: Math.PI, grounded: true, swim: false, climb: false, glide: false, crouch: false,
   atk: null, hold: -1, draw: -1, blocking: false, rollT: 0, rollDir: new T.Vector3(), iframes: 0, hurtT: 0, emberCd: 0, stDelay: 0, airT: 0, animT: 0,
   lock: null, dead: false, moving: 0, sprint: false, step: 0, combo: 0, comboT: 0, queued: false, spin: 0,
+  castT: 0, pushing: 0, landT: 0, vaultT: 0, rollBack: false, glideArm: false, chargeFx: false,
 };
 const CAM = { yaw: 0, pitch: 0.32, dist: 7.2, shake: 0, cur: new T.Vector3(0, 8, 76) };
-const keys = {}, mouse = { l: false, r: false };
+const keys: Record<string, boolean> = {}, mouse = { l: false, r: false };
 const lockMark = mesh(new T.ConeGeometry(0.25, 0.5, 4), glowMat(GOLD), 0, -99, 0, scene, true); lockMark.rotation.x = Math.PI;
 let hitStop = 0, timeScale = 1, cine = null;
 
@@ -321,7 +323,7 @@ function toggleLock() {
   for (const e of enemies) { if (!e.alive || (e.def.boss && e.state === 'sleep')) continue; const d = Math.hypot(e.pos.x - PL.pos.x, e.pos.z - PL.pos.z); if (d < bd) { bd = d; best = e; } }
   PL.lock = best; if (!best) notify('No enemy in sight.'); else sfx('ui');
 }
-function hurtPlayer(dmg, sx, sz, opts) {
+function hurtPlayer(dmg, sx, sz, opts?) {
   if (PL.iframes > 0 || PL.dead || MODE !== 'play' || cine) return false;
   if (PL.blocking && !(opts && opts.unblockable)) {
     const a = Math.abs(Math.atan2(sx - PL.pos.x, sz - PL.pos.z) - PL.yaw), ang = Math.min(a, Math.PI * 2 - a);
@@ -544,7 +546,7 @@ function bowPose(hp, dr) {
 /* ---------- carried gear: in the hand, or slung on the back while swimming or while the other weapon is out ---------- */
 const CARRY = (() => {
   const chest = hero.p.chest, AX = new T.Vector3(1, 0, 0), AZ = new T.Vector3(0, 0, 1);
-  const q = (z, x, y) => { const r = new T.Quaternion().setFromAxisAngle(AZ, z).multiply(new T.Quaternion().setFromAxisAngle(AX, x)); if (y) r.premultiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(0, 1, 0), y)); return r; };
+  const q = (z, x, y?) => { const r = new T.Quaternion().setFromAxisAngle(AZ, z).multiply(new T.Quaternion().setFromAxisAngle(AX, x)); if (y) r.premultiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(0, 1, 0), y)); return r; };
   const mk = (obj, bp, bq, bs) => ({ obj, hand: obj.parent, hp: obj.position.clone(), hq: obj.quaternion.clone(), hs: obj.scale.x, bp, bq, bs, held: true });
   const it = {
     sword: mk(hero.sword, new T.Vector3(-0.21, 0.6, -0.2), q(0.52, Math.PI / 2), 0.92),      // hilt over the right shoulder, blade across the back
@@ -577,7 +579,7 @@ function camHits(cx, cz, cy) {   // tents, giant trunks, the windmill: anything 
   for (let i = 0; i < _bigC.length; i++) { const b = _bigC[i], dx = cx - b.c.x, dz = cz - b.c.z; if (b.c.on && cy < b.top && dx * dx + dz * dz < b.c.r * b.c.r) return true; }
   return false;
 }
-function updateCamera(dt, instant) {
+function updateCamera(dt, instant?) {
   const p = PL, aiming = G.p.weapon === 'bow' && (mouse.r || p.draw >= 0) && MODE === 'play';
   const ks = 1.9 * dt; if (keys.ArrowLeft) CAM.yaw += ks; if (keys.ArrowRight) CAM.yaw -= ks; if (keys.ArrowUp) CAM.pitch += ks * 0.6; if (keys.ArrowDown) CAM.pitch -= ks * 0.6;
   if (p.lock) { const want = Math.atan2(-(p.lock.pos.x - p.pos.x), -(p.lock.pos.z - p.pos.z)); CAM.yaw = angLerp(CAM.yaw, want, 5 * dt); }
@@ -596,7 +598,7 @@ function updateCamera(dt, instant) {
   camera.fov = lerp(camera.fov, aiming ? 48 : (p.sprint ? 67 : 60), 1 - Math.exp(-8 * dt)); camera.updateProjectionMatrix();
 }
 /* short scripted camera moves (boss entrance, enrage, fall) */
-function startCine(dur, camFn, onEnd) {
+function startCine(dur, camFn, onEnd?) {
   cine = { t: 0, dur, camFn, onEnd }; document.body.classList.add('cine');
   for (const k in keys) keys[k] = false; mouse.l = mouse.r = false; PL.hold = -1; PL.draw = -1; PL.atk = null; PL.queued = false; PL.lock = null;
 }
@@ -620,7 +622,7 @@ function spawnProj(type, pos, dir, speed, dmg, mine) {
   pr.live = true; pr.pos.copy(pos); pr.vel.copy(dir).multiplyScalar(speed); pr.dmg = dmg; pr.mine = mine; pr.life = type === 'spore' ? 6 : 3.2; pr.m.visible = true; pr.grav = type === 'arrow' ? 9 : 0; pr.m.position.copy(pos);
   return pr;
 }
-function killProj(pr, fx) { pr.live = false; pr.m.visible = false; if (fx) { burst(pr.pos.x, pr.pos.y, pr.pos.z, pr.type === 'fire' ? 0xff8a3c : pr.type === 'spore' ? 0xc77bff : 0xe8dcc0, pr.type === 'arrow' ? 4 : 16, pr.type === 'arrow' ? 3 : 5, 0.45); if (pr.type === 'fire') addRing(pr.pos.x, pr.pos.y, pr.pos.z, 0xff9a4a, 1.8, 0.3); } }
+function killProj(pr, fx?) { pr.live = false; pr.m.visible = false; if (fx) { burst(pr.pos.x, pr.pos.y, pr.pos.z, pr.type === 'fire' ? 0xff8a3c : pr.type === 'spore' ? 0xc77bff : 0xe8dcc0, pr.type === 'arrow' ? 4 : 16, pr.type === 'arrow' ? 3 : 5, 0.45); if (pr.type === 'fire') addRing(pr.pos.x, pr.pos.y, pr.pos.z, 0xff9a4a, 1.8, 0.3); } }
 function updateProjs(dt) {
   for (const pr of projs) {
     if (!pr.live) continue;
@@ -702,7 +704,7 @@ function buildEnemy(type) {
     const sh = grpIn(h.p.elbowL, 0.12, -0.15, 0); mesh(bx(0.06, 0.7, 0.5), lam(SD), 0, 0, 0, sh); mesh(bx(0.07, 0.3, 0.06), glowMat(RUNE), 0.01, 0, 0, sh, true);
     return h;
   }
-  const g = new T.Group(), p = {};
+  const g = new T.Group(), p: CreatureRig = {};
   if (type === 'boar') {
     const fur = 0x6b5a45, dark = 0x54463a;
     p.body = mesh(sph(0.7, 10, 8), lam(fur), 0, 0.85, 0, g); p.body.scale.set(0.85, 0.82, 1.3);
@@ -732,13 +734,13 @@ function buildEnemy(type) {
     const hd = grpIn(p.pivot, 0, 6.6, 0.9); p.headG = hd;
     mesh(bx(1.1, 0.24, 0.5), barkD, 0, 0.36, 0.72, hd).rotation.x = 0.3; mesh(bx(0.9, 0.3, 0.5), barkD, 0, -0.55, 0.62, hd);
     p.eyes = []; for (const s of [-1, 1]) { p.eyes.push(mesh(sph(0.17, 8, 6), new T.MeshBasicMaterial({ color: 0x2f5560 }), s * 0.4, 0.08, 0.86, hd, true)); let px = s * 0.5, py = 0.7; for (let k = 0; k < 4; k++) { const len = 1.5 - k * 0.25, a = -s * (0.5 + k * 0.28), br = mesh(cyl(0.06 - k * 0.01, 0.14 - k * 0.02, len, 5), bark, px + Math.sin(-a) * len / 2, py + Math.cos(a) * len / 2, -0.15, hd); br.rotation.z = a; if (k % 2 === 0) { const tw = mesh(cyl(0.02, 0.05, 0.7, 4), bark, px + Math.sin(-a) * len * 0.6 - s * 0.2, py + Math.cos(a) * len * 0.6 + 0.3, -0.15, hd); tw.rotation.z = a - s * 0.8; } px += Math.sin(-a) * len; py += Math.cos(a) * len; } }
-    for (const [k, s] of [['armR', -1], ['armL', 1]]) {
+    for (const [k, s] of [['armR', -1], ['armL', 1]] as [string, number][]) {
       const a = p[k] = new T.Group(); a.position.set(s * 2.75, 5.1, 0); p.pivot.add(a);
       mesh(pg, mossV, 0, 0.1, 0, a).scale.set(1.2, 0.8, 1.2); mesh(cyl(0.62, 0.5, 2.2, 8), bark, 0, -1.1, 0, a);
       const f = grpIn(a, 0, -2.2, 0); p['fore' + (s < 0 ? 'R' : 'L')] = f; mesh(cyl(0.5, 0.62, 1.7, 8), barkD, 0, -0.8, 0, f); mesh(pg, new T.MeshToonMaterial({ color: 0x8a938e, gradientMap: TOON, vertexColors: true }), 0, -1.9, 0, f).scale.set(1.05, 0.95, 1.05);
       for (let q = 0; q < 3; q++) mesh(cyl(0.035, 0.035, 1.2 + q * 0.5, 4), lam(VINE), (q - 1) * 0.35, -1.3 - q * 0.2, 0.45, a, true);
     }
-    for (const [k, s] of [['legR', -1], ['legL', 1]]) { const l = p[k] = new T.Group(); l.position.set(s * 1.15, 2.3, 0); p.pivot.add(l); mesh(cyl(0.8, 0.95, 2.3, 8), bark, 0, -1.15, 0, l); mesh(cyl(1.05, 1.1, 0.35, 8), stone, 0, -2.15, 0.1, l); mesh(pg, mossV, 0, -0.2, 0, l).scale.set(1, 0.4, 1); }
+    for (const [k, s] of [['legR', -1], ['legL', 1]] as [string, number][]) { const l = p[k] = new T.Group(); l.position.set(s * 1.15, 2.3, 0); p.pivot.add(l); mesh(cyl(0.8, 0.95, 2.3, 8), bark, 0, -1.15, 0, l); mesh(cyl(1.05, 1.1, 0.35, 8), stone, 0, -2.15, 0.1, l); mesh(pg, mossV, 0, -0.2, 0, l).scale.set(1, 0.4, 1); }
   }
   return { g, p };
 }
@@ -864,7 +866,7 @@ function updateHazards(dt) {
 }
 function clearHazards() { for (const h of hazards) scene.remove(h.g); hazards.length = 0; for (const pr of projs) if (pr.live && !pr.mine) killProj(pr); }
 let boss = null, bossFight = false;
-function bossGlow(hex, eyes) { const P = boss.p; P.core.material.color.setHex(hex); P.coreHalo.material.color.setHex(hex); for (const c of P.cracks) c.material.color.setHex(hex); if (eyes != null) P.eyes.forEach(m => m.material.color.setHex(eyes)); }
+function bossGlow(hex, eyes?) { const P = boss.p; P.core.material.color.setHex(hex); P.coreHalo.material.color.setHex(hex); for (const c of P.cracks) c.material.color.setHex(hex); if (eyes != null) P.eyes.forEach(m => m.material.color.setHex(eyes)); }
 function bossReset() {
   bossFight = false; clearHazards(); if (cine) { cine = null; timeScale = 1; document.body.classList.remove('cine'); }
   if (!boss) return;

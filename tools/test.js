@@ -52,6 +52,10 @@ const { open } = require('./shot.js');
   for (const c of ['c_camp', 'c_mesa', 'c_islet']) { await ev(`G.p.hp=G.p.maxHp;const c=CHESTS.${c};placePlayer(c.x+1,c.z);`); await frames(12); await ev('findInteract()'); chk('chest prompt ' + c, await ev('return nearInteract&&nearInteract._l') === 'Open chest'); await key('KeyE'); await frames(40); }
   chk('3 shards, lids opened', await ev('return G.inv.shard===3 && shardCount()===3 && CHESTS.c_camp.lid.rotation.x<-1.5'));
   await ev('placePlayer(riverX(40),40)'); await frames(20); chk('swimming', await ev('return PL.swim'));
+  // swimming under the stone bridge stays in the water; the deck above is still walkable
+  await ev('placePlayer(BRIDGE.x+3.5,2);CAM.yaw=Math.PI;keys.KeyW=true;G.p.st=G.p.maxSt;window._uy=-9'); for (let i = 0; i < 24; i++) { await frames(10); await ev('G.p.st=G.p.maxSt;if(onBridge(PL.pos.x,PL.pos.z))_uy=Math.max(_uy,PL.pos.y)'); }
+  await ev('keys.KeyW=false'); chk('swims under the bridge', await ev('return _uy>-9&&_uy<-1.5&&PL.pos.z>BRIDGE.z+BRIDGE.w'));
+  await ev('placePlayer(BRIDGE.x-14,BRIDGE.z);CAM.yaw=-Math.PI/2;keys.KeyW=true'); await frames(330); await ev('keys.KeyW=false'); const dk = await ev('return [PL.pos.x-BRIDGE.x,PL.pos.y,PL.pos.z,PL.swim]'); chk('walks across the bridge deck', dk[0] > 10 && !dk[3]);
   await ev('placePlayer(40-17.5,-95);CAM.yaw=-Math.PI/2;keys.KeyW=true;G.p.st=G.p.maxSt'); let climbed = false; for (let i = 0; i < 40; i++) { await frames(10); if (await ev('return PL.climb')) climbed = true; }
   await ev('keys.KeyW=false'); chk('climb state seen', climbed); chk('reached mesa top', await ev('return PL.pos.y>10'));
   await ev('placePlayer(40,-95);CAM.yaw=Math.PI/2;keys.KeyW=true;G.p.st=G.p.maxSt'); await frames(30); await key('Space'); await frames(8); await key('Space', 'keyup'); await frames(2); await key('Space');

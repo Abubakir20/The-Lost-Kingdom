@@ -47,11 +47,21 @@ function terrainH(x: number, z: number): number {
   }
   return h;
 }
+const onBridge = (x: number, z: number, pad = 0) => Math.abs(z - BRIDGE.z) < BRIDGE.w + pad && Math.abs(x - BRIDGE.x) < BRIDGE.half + pad;
 function groundAt(x: number, z: number): number {
   let h = terrainH(x, z);
-  if (Math.abs(z - BRIDGE.z) < BRIDGE.w && Math.abs(x - BRIDGE.x) < BRIDGE.half) h = Math.max(h, BRIDGE.y);
+  if (onBridge(x, z)) h = Math.max(h, BRIDGE.y);
   return h;
 }
+/* the floor under something at height y: the bridge deck counts only for what is already up at deck level,
+   so you can swim (or shoot) underneath it */
+const BRIDGE_UNDER = BRIDGE.y - 0.85, BRIDGE_SOFFIT = BRIDGE.y - 0.5;
+function floorAt(x: number, z: number, y: number): number {
+  const h = terrainH(x, z);
+  return onBridge(x, z) && y > BRIDGE_UNDER ? Math.max(h, BRIDGE.y) : h;
+}
+/* too little headroom under the deck to pass: the bank where it runs up under the bridge */
+const bridgeLowGap = (x: number, z: number, y: number, r: number) => y <= BRIDGE_UNDER && onBridge(x, z, r) && Math.max(terrainH(x, z), WATER_Y - 0.95) > BRIDGE_SOFFIT - 1.75;
 const inTemple = (x: number, z: number, pad = 0) => x > TP.x0 - pad && x < TP.x1 + pad && z > TP.z0 - pad && z < TP.z1 + pad;
 
 const PATHS = [

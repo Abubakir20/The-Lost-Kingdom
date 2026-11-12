@@ -340,12 +340,22 @@ function terrainH(x, z) {
     }
     return h;
 }
+const onBridge = (x, z, pad = 0) => Math.abs(z - BRIDGE.z) < BRIDGE.w + pad && Math.abs(x - BRIDGE.x) < BRIDGE.half + pad;
 function groundAt(x, z) {
     let h = terrainH(x, z);
-    if (Math.abs(z - BRIDGE.z) < BRIDGE.w && Math.abs(x - BRIDGE.x) < BRIDGE.half)
+    if (onBridge(x, z))
         h = Math.max(h, BRIDGE.y);
     return h;
 }
+/* the floor under something at height y: the bridge deck counts only for what is already up at deck level,
+   so you can swim (or shoot) underneath it */
+const BRIDGE_UNDER = BRIDGE.y - 0.85, BRIDGE_SOFFIT = BRIDGE.y - 0.5;
+function floorAt(x, z, y) {
+    const h = terrainH(x, z);
+    return onBridge(x, z) && y > BRIDGE_UNDER ? Math.max(h, BRIDGE.y) : h;
+}
+/* too little headroom under the deck to pass: the bank where it runs up under the bridge */
+const bridgeLowGap = (x, z, y, r) => y <= BRIDGE_UNDER && onBridge(x, z, r) && Math.max(terrainH(x, z), WATER_Y - 0.95) > BRIDGE_SOFFIT - 1.75;
 const inTemple = (x, z, pad = 0) => x > TP.x0 - pad && x < TP.x1 + pad && z > TP.z0 - pad && z < TP.z1 + pad;
 const PATHS = [
     [[0, 60], [30, 42], [52, 22], [78, 20]],
@@ -594,9 +604,11 @@ function platformAt(x, z, y) {
     }
     return h;
 }
-function insideBox(x, z, pad) {
+function insideBox(x, z, pad, y) {
     for (let i = 0; i < boxes.length; i++) {
         const b = boxes[i];
+        if (y !== undefined && b.top !== undefined && y >= b.top)
+            continue;
         if (b.on && x > b.x0 - pad && x < b.x1 + pad && z > b.z0 - pad && z < b.z1 + pad)
             return true;
     }
@@ -2421,6 +2433,8 @@ const spirit = new T.Group();
     for (const px of [-7, 0, 7]) {
         mesh(bx(2.2, 5.4, W * 2 - 0.5), lam(STONE_D), px, BRIDGE.y - 3.1, 0, g);
         mesh(bx(2.8, 0.5, W * 2 + 0.3), lam(STONE), px, BRIDGE.y - 0.65, 0, g);
+        /* the piers stop a swimmer; on the deck above they are ignored */
+        addBox(BRIDGE.x + px - 1.4, BRIDGE.x + px + 1.4, BRIDGE.z - W - 0.15, BRIDGE.z + W + 0.15, BRIDGE_SOFFIT);
     }
     for (const px of [-3.5, 3.5]) {
         const a = mesh(new T.CylinderGeometry(2.4, 2.4, W * 2 - 0.6, 12, 1, true, 0, Math.PI), lam(STONE_D, { side: T.DoubleSide }), px, BRIDGE.y - 1.9, 0, g);
@@ -4121,8 +4135,20 @@ function updatePlayer(dt) {
     p.wasClimb = p.climb;
     if (p.mantleT > 0)
         p.mantleT -= dt;
+    const ox = p.pos.x, oz = p.pos.z;
     p.pos.x += p.vel.x * dt;
     p.pos.z += p.vel.z * dt;
+    /* under the bridge: open water passes, a bank with no headroom is a wall (slide along it) */
+    if (bridgeLowGap(p.pos.x, p.pos.z, p.pos.y, 0.45)) {
+        if (!bridgeLowGap(ox, p.pos.z, p.pos.y, 0.45))
+            p.pos.x = ox;
+        else if (!bridgeLowGap(p.pos.x, oz, p.pos.y, 0.45))
+            p.pos.z = oz;
+        else {
+            p.pos.x = ox;
+            p.pos.z = oz;
+        }
+    }
     if (p.grounded && inTemple(p.pos.x, p.pos.z, 2))
         pushBlock();
     resolveCollide(p.pos, 0.45, p.pos.y);
@@ -4144,7 +4170,7 @@ function updatePlayer(dt) {
         p.pos.z *= LIMIT / dl;
     }
     // vertical
-    const g = groundAt(p.pos.x, p.pos.z), plat = platformAt(p.pos.x, p.pos.z, p.pos.y), surf = Math.max(g, WATER_Y - 0.95, plat), deep = g < WATER_Y - 0.95 && plat < WATER_Y - 0.95;
+    const g = floorAt(p.pos.x, p.pos.z, p.pos.y), plat = platformAt(p.pos.x, p.pos.z, p.pos.y), surf = Math.max(g, WATER_Y - 0.95, plat), deep = g < WATER_Y - 0.95 && plat < WATER_Y - 0.95;
     p.glide = false;
     if (p.grounded) {
         if (surf < p.pos.y - 0.7) {
@@ -4714,7 +4740,7 @@ function updateCamera(dt, instant) {
     let ok = dist;
     for (let i = 1; i <= 12; i++) {
         const d = dist * i / 12, cx = _v1.x + dxx * d, cz = _v1.z + dzz * d, cy = _v1.y + dyy * d;
-        if ((cy < 11 && insideBox(cx, cz, 0.3)) || cy < groundAt(cx, cz) + 0.35 || camHits(cx, cz, cy)) {
+        if ((cy < 11 && insideBox(cx, cz, 0.3, cy)) || cy < floorAt(cx, cz, cy) + 0.35 || (onBridge(cx, cz, 0.2) && cy > BRIDGE_SOFFIT - 0.25 && cy < BRIDGE.y + 0.35) || camHits(cx, cz, cy)) {
             ok = Math.max(0.6, dist * (i - 1) / 12);
             break;
         }
@@ -5136,7 +5162,7 @@ function updateProjs(dt) {
         }
         else if (Math.random() < 0.7)
             burst(pr.pos.x, pr.pos.y, pr.pos.z, pr.type === 'fire' ? 0xffc04a : 0xa85cff, 1, 0.8, 0.35, -1);
-        if (pr.pos.y < groundAt(pr.pos.x, pr.pos.z) || (pr.pos.y < 10 && insideBox(pr.pos.x, pr.pos.z, 0))) {
+        if (pr.pos.y < floorAt(pr.pos.x, pr.pos.z, pr.pos.y + 0.6) || (pr.pos.y < 10 && insideBox(pr.pos.x, pr.pos.z, 0, pr.pos.y))) {
             if (pr.type === 'arrow' && pr.pos.y > WATER_Y - 0.2)
                 stickArrow(pr.pos, pr.vel, null);
             killProj(pr, true);

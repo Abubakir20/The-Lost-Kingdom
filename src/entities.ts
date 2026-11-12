@@ -394,7 +394,10 @@ function updatePlayer(dt: number) {
   }
   if (p.wasClimb && !p.climb && p.climbT > 0.35 && p.grounded && mag > 0 && p.rollT <= 0) { p.mantleT = 0.34; sfx('step'); }
   p.climbT = p.climb ? p.climbT + dt : (p.wasClimb ? p.climbT : 0); if (!p.climb && !p.wasClimb) p.climbT = 0; p.wasClimb = p.climb; if (p.mantleT > 0) p.mantleT -= dt;
+  const ox = p.pos.x, oz = p.pos.z;
   p.pos.x += p.vel.x * dt; p.pos.z += p.vel.z * dt;
+  /* under the bridge: open water passes, a bank with no headroom is a wall (slide along it) */
+  if (bridgeLowGap(p.pos.x, p.pos.z, p.pos.y, 0.45)) { if (!bridgeLowGap(ox, p.pos.z, p.pos.y, 0.45)) p.pos.x = ox; else if (!bridgeLowGap(p.pos.x, oz, p.pos.y, 0.45)) p.pos.z = oz; else { p.pos.x = ox; p.pos.z = oz; } }
   if (p.grounded && inTemple(p.pos.x, p.pos.z, 2)) pushBlock();
   resolveCollide(p.pos, 0.45, p.pos.y);
   // vault: jumping into something with a top within reach carries you up onto it
@@ -402,7 +405,7 @@ function updatePlayer(dt: number) {
   if (hitTop !== null && !p.grounded && mag > 0 && p.rollT <= 0 && hitTop - p.pos.y < 1.35 && p.vel.y > -9) { const need = Math.sqrt(2 * 27 * (hitTop - p.pos.y + 0.3)); if (p.vel.y < need) { if (p.vaultT <= 0) sfx('step'); p.vel.y = need; p.vaultT = 0.28; p.glideArm = false; } }
   const dl = Math.hypot(p.pos.x, p.pos.z); if (dl > LIMIT) { p.pos.x *= LIMIT / dl; p.pos.z *= LIMIT / dl; }
   // vertical
-  const g = groundAt(p.pos.x, p.pos.z), plat = platformAt(p.pos.x, p.pos.z, p.pos.y), surf = Math.max(g, WATER_Y - 0.95, plat), deep = g < WATER_Y - 0.95 && plat < WATER_Y - 0.95;
+  const g = floorAt(p.pos.x, p.pos.z, p.pos.y), plat = platformAt(p.pos.x, p.pos.z, p.pos.y), surf = Math.max(g, WATER_Y - 0.95, plat), deep = g < WATER_Y - 0.95 && plat < WATER_Y - 0.95;
   p.glide = false;
   if (p.grounded) {
     if (surf < p.pos.y - 0.7) { p.grounded = false; p.vel.y = 0; p.airT = 0; }
@@ -628,7 +631,7 @@ function updateCamera(dt: number, instant?: boolean) {
   _v1.set(p.pos.x + rx * off, p.pos.y + th, p.pos.z + rz * off);
   const dxx = Math.sin(CAM.yaw) * cp, dyy = Math.sin(CAM.pitch), dzz = Math.cos(CAM.yaw) * cp;
   let ok = dist;
-  for (let i = 1; i <= 12; i++) { const d = dist * i / 12, cx = _v1.x + dxx * d, cz = _v1.z + dzz * d, cy = _v1.y + dyy * d; if ((cy < 11 && insideBox(cx, cz, 0.3)) || cy < groundAt(cx, cz) + 0.35 || camHits(cx, cz, cy)) { ok = Math.max(0.6, dist * (i - 1) / 12); break; } }
+  for (let i = 1; i <= 12; i++) { const d = dist * i / 12, cx = _v1.x + dxx * d, cz = _v1.z + dzz * d, cy = _v1.y + dyy * d; if ((cy < 11 && insideBox(cx, cz, 0.3, cy)) || cy < floorAt(cx, cz, cy) + 0.35 || (onBridge(cx, cz, 0.2) && cy > BRIDGE_SOFFIT - 0.25 && cy < BRIDGE.y + 0.35) || camHits(cx, cz, cy)) { ok = Math.max(0.6, dist * (i - 1) / 12); break; } }
   _v2.set(_v1.x + dxx * ok, Math.max(_v1.y + dyy * ok, WATER_Y + 0.35), _v1.z + dzz * ok);
   if (instant) CAM.cur.copy(_v2); else CAM.cur.lerp(_v2, 1 - Math.exp(-16 * dt));
   camera.position.copy(CAM.cur);
@@ -825,7 +828,7 @@ function updateProjs(dt: number) {
     pr.m.position.copy(pr.pos);
     if (pr.type === 'arrow') { _v1.copy(pr.pos).add(pr.vel); pr.m.lookAt(_v1); }
     else if (Math.random() < 0.7) burst(pr.pos.x, pr.pos.y, pr.pos.z, pr.type === 'fire' ? 0xffc04a : 0xa85cff, 1, 0.8, 0.35, -1);
-    if (pr.pos.y < groundAt(pr.pos.x, pr.pos.z) || (pr.pos.y < 10 && insideBox(pr.pos.x, pr.pos.z, 0))) {
+    if (pr.pos.y < floorAt(pr.pos.x, pr.pos.z, pr.pos.y + 0.6) || (pr.pos.y < 10 && insideBox(pr.pos.x, pr.pos.z, 0, pr.pos.y))) {
       if (pr.type === 'arrow' && pr.pos.y > WATER_Y - 0.2) stickArrow(pr.pos, pr.vel, null);
       killProj(pr, true); continue;
     }

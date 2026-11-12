@@ -227,7 +227,9 @@ const spirit = new T.Group();
     for (let i = -2; i <= 2; i++) { mesh(bx(0.7, 1.35, 0.7), lam(STONE_D), i * 7, BRIDGE.y + 0.6, s * (W - 0.22), g); mesh(bx(0.85, 0.16, 0.85), lam(STONE), i * 7, BRIDGE.y + 1.32, s * (W - 0.22), g); }
     mesh(bx(H * 2 - 2, 0.1, 0.5), lam(MOSS), 1, BRIDGE.y + 0.75, s * (W - 0.22), g, true).scale.x = 0.3;
   }
-  for (const px of [-7, 0, 7]) { mesh(bx(2.2, 5.4, W * 2 - 0.5), lam(STONE_D), px, BRIDGE.y - 3.1, 0, g); mesh(bx(2.8, 0.5, W * 2 + 0.3), lam(STONE), px, BRIDGE.y - 0.65, 0, g); }
+  for (const px of [-7, 0, 7]) { mesh(bx(2.2, 5.4, W * 2 - 0.5), lam(STONE_D), px, BRIDGE.y - 3.1, 0, g); mesh(bx(2.8, 0.5, W * 2 + 0.3), lam(STONE), px, BRIDGE.y - 0.65, 0, g);
+    /* the piers stop a swimmer; on the deck above they are ignored */
+    addBox(BRIDGE.x + px - 1.4, BRIDGE.x + px + 1.4, BRIDGE.z - W - 0.15, BRIDGE.z + W + 0.15, BRIDGE_SOFFIT); }
   for (const px of [-3.5, 3.5]) { const a = mesh(new T.CylinderGeometry(2.4, 2.4, W * 2 - 0.6, 12, 1, true, 0, Math.PI), lam(STONE_D, { side: T.DoubleSide }), px, BRIDGE.y - 1.9, 0, g); a.rotation.set(Math.PI / 2, Math.PI / 2, 0); }
   arch(BRIDGE.x + 17.5, BRIDGE.z, Math.PI / 2, true);
   lampPost(BRIDGE.x + 16, BRIDGE.z + 4); lampPost(BRIDGE.x - 16.5, BRIDGE.z - 4); signpost(BRIDGE.x - 18, BRIDGE.z + 4.5, 2.1);

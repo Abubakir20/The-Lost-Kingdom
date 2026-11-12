@@ -43,8 +43,8 @@ function platformAt(x: number, z: number, y: number): number {
   for (let i = 0; i < boxes.length; i++) { const b = boxes[i]; if (b.top === undefined || !b.on || b.top > y + 0.35 || b.top <= h) continue; if (x > b.x0 - pad && x < b.x1 + pad && z > b.z0 - pad && z < b.z1 + pad) h = b.top; }
   return h;
 }
-function insideBox(x: number, z: number, pad: number): boolean {
-  for (let i = 0; i < boxes.length; i++) { const b = boxes[i]; if (b.on && x > b.x0 - pad && x < b.x1 + pad && z > b.z0 - pad && z < b.z1 + pad) return true; }
+function insideBox(x: number, z: number, pad: number, y?: number): boolean {
+  for (let i = 0; i < boxes.length; i++) { const b = boxes[i]; if (y !== undefined && b.top !== undefined && y >= b.top) continue; if (b.on && x > b.x0 - pad && x < b.x1 + pad && z > b.z0 - pad && z < b.z1 + pad) return true; }
   return false;
 }
 

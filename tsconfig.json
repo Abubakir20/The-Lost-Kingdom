@@ -5,7 +5,7 @@
     "module": "none",
     "outFile": "dist/game.js",
     "strict": false,
-    "noImplicitAny": false,
+    "noImplicitAny": true,
     "types": ["three"],
     "removeComments": false,
     "newLine": "lf",

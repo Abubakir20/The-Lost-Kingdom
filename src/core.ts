@@ -70,7 +70,7 @@ function pathDist(x: number, z: number): number {
   return best;
 }
 /* writes rgb (0..1) into out[0..2] */
-function terrainColor(x, z, h, out) {
+function terrainColor(x: number, z: number, h: number, out: number[]) {
   const n = 0.5 + 0.5 * Math.sin(x * 0.31 + Math.sin(z * 0.17) * 2) * Math.cos(z * 0.27 + Math.sin(x * 0.11));
   const big = 0.5 + 0.5 * Math.sin(x * 0.037 + Math.sin(z * 0.021) * 2.4) * Math.cos(z * 0.043 - Math.sin(x * 0.019) * 1.8);
   const west = smooth(4, -14, x - riverX(z));
@@ -93,7 +93,7 @@ function terrainColor(x, z, h, out) {
 }
 
 /* ---------- data ---------- */
-const ITEMS = {
+const ITEMS: Record<string, ItemDef> = {
   potion: { n: 'Healing Draught', c: 'Potions', d: 'Brewed from silverleaf. Restores 50 health.', use: 1 },
   berry: { n: 'Sunberries', c: 'Food', d: 'Sweet and bright. Restores 12 health.', use: 1 },
   roast: { n: 'Roasted Boar', c: 'Food', d: 'A hearty meal. Restores 35 health and all stamina.', use: 1 },
@@ -110,7 +110,7 @@ const ITEMS = {
   heart: { n: 'Heart of the Forest', c: 'Artifacts', d: 'It beats slowly. It seems to know you.' },
   relic: { n: 'Eldorian Relic', c: 'Collectibles', d: 'A coin-sized seal from the lost kingdom. Five were hidden in the valley.' },
 };
-const RECIPES = [
+const RECIPES: Recipe[] = [
   { out: 'potion', n: 1, need: { herb: 3 }, label: 'Brew a Healing Draught' },
   { out: 'arrow', n: 5, need: { wood: 1, stone: 1 }, label: 'Fletch 5 arrows' },
   { out: 'roast', n: 1, need: { meat: 1, wood: 1 }, label: 'Roast boar meat' },
@@ -119,7 +119,7 @@ const SHOP = [
   { id: 'potion', price: 20 }, { id: 'arrow', n: 10, price: 15 }, { id: 'roast', price: 18 },
   { id: 'armor', price: 60, name: 'Leather Jerkin', d: 'Reduces every hit you take by 3.' },
 ];
-const SELL = { fang: 6, core: 15, crystal: 10, meat: 4 };
+const SELL: Record<string, number> = { fang: 6, core: 15, crystal: 10, meat: 4 };
 const LOCS = [
   { id: 'shrine', name: 'Shrine of Awakening', x: 0, z: 60, r: 14, way: [0, 55.5] },
   { id: 'village', name: 'Oakrest', x: 78, z: 20, r: 26, way: [70, 11] },

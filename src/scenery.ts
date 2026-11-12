@@ -1,13 +1,13 @@
 /* ============ scenery: shrine, bridge, Oakrest, ruins, Veilfall, the Temple of Echoes ============ */
 const STATIC = new T.Group(); scene.add(STATIC);
 function grpAt(x: number, y: number, z: number, ry = 0, par: THREE.Object3D = STATIC) { const g = new T.Group(); g.position.set(x, y, z); g.rotation.y = ry; par.add(g); return g; }
-const VINE = 0x4f8a3a, PLASTER = 0xf4e8cc, chimneys = [], banners = [];
+const VINE = 0x4f8a3a, PLASTER = 0xf4e8cc, chimneys: number[][] = [], banners: any[] = [];
 // painted surfaces: every cached stone, plaster and timber material picks up a generated texture
 for (const c of [STONE, STONE_D, 0x8e918b, 0x777b76, 0x9a9d97, 0xb9bfb3, 0xa4ada4, 0x717d77]) painted(lam(c), 'stone', 0.3, 0.9);
 painted(lam(PLASTER), 'plaster', 0.3, 0.85);
 for (const c of [TIMBER, 0x7a4a2a, 0x8a5a30, 0xa8743c, 0x9a6a3c, 0xb07c44, 0x8a6a44, 0x5a3d28, 0x6b4a30, 0x5f432c, 0xb88a54]) painted(lam(c), 'wood', 0.55, 0.7);
 
-function pillar(x, z, h, r = 0.6, collide = true, broken?) {
+function pillar(x: number, z: number, h: number, r = 0.6, collide = true, broken?: boolean) {
   const g = grpAt(x, groundAt(x, z), z, rng() * 6.283);
   mesh(bx(r * 3.1, 0.3, r * 3.1), lam(STONE_D), 0, 0.15, 0, g); mesh(bx(r * 2.5, 0.32, r * 2.5), lam(STONE), 0, 0.46, 0, g);
   mesh(cyl(r * 0.84, r, h, 10), lam(STONE), 0, 0.62 + h / 2, 0, g);
@@ -20,7 +20,7 @@ function pillar(x, z, h, r = 0.6, collide = true, broken?) {
   if (collide) addCircle(x, z, r * 1.25);
   return g;
 }
-function arch(x, z, rot, glow) {
+function arch(x: number, z: number, rot: number, glow: boolean) {
   const g = grpAt(x, groundAt(x, z), z, rot);
   for (const s of [-1, 1]) { for (let k = 0; k < 5; k++) mesh(bx(1.1 - (k % 2) * 0.1, 1, 1.1 - (k % 2) * 0.1), lam(k % 2 ? STONE : STONE_D), s * 2.2, 0.5 + k, 0, g); mesh(bx(1.5, 0.3, 1.5), lam(STONE_D), s * 2.2, 0.15, 0, g); }
   for (let k = -3; k <= 3; k++) { const a = k * 0.33; const st = mesh(bx(0.95, 0.9, 1.15), lam(k % 2 ? STONE : STONE_D), Math.sin(a) * 2.5, 4.9 + Math.cos(a) * 1.35, 0, g); st.rotation.z = -a; }
@@ -30,7 +30,7 @@ function arch(x, z, rot, glow) {
   const c = Math.cos(rot), s = Math.sin(rot);
   addCircle(x + c * 2.2, z - s * 2.2, 0.8); addCircle(x - c * 2.2, z + s * 2.2, 0.8);
 }
-function emblem(parent, x, y, z, s, color) {       // original three-arc sigil of Eldoria
+function emblem(parent: THREE.Group|THREE.Scene|THREE.Mesh<THREE.BufferGeometry,THREE.MeshToonMaterial>, x: number, y: number, z: number, s: number, color: number) {       // original three-arc sigil of Eldoria
   const g = new T.Group(); g.position.set(x, y, z); g.scale.setScalar(s); parent.add(g);
   const m = glowMat(color);
   mesh(new T.TorusGeometry(1, 0.07, 6, 28, Math.PI * 1.5), m, 0, 0, 0, g, true).userData.live = 1;
@@ -38,8 +38,8 @@ function emblem(parent, x, y, z, s, color) {       // original three-arc sigil o
   mesh(new T.TorusGeometry(0.26, 0.07, 6, 14), m, 0, 0, 0, g, true).userData.live = 1;
   return g;
 }
-const waystones = {};
-function waystone(id, x, z) {
+const waystones: Record<string, any> = {};
+function waystone(id: string, x: number, z: number) {
   const y = groundAt(x, z), g = grpAt(x, y, z);
   mesh(cyl(1.5, 1.7, 0.3, 12), lam(STONE_D), 0, 0.15, 0, g); mesh(cyl(1.15, 1.3, 0.3, 12), lam(STONE), 0, 0.42, 0, g);
   mesh(new T.TorusGeometry(1.32, 0.05, 5, 26), glowMat(RUNE), 0, 0.33, 0, g, true).rotation.x = Math.PI / 2;
@@ -50,34 +50,34 @@ function waystone(id, x, z) {
   const em = emblem(dyn, 0, 2.5, 0.5, 0.3, RUNE); const hl = halo(dyn, 0, 2.5, 0.6, 3.2, RUNE, 0.4);
   addCircle(x, z, 0.9); waystones[id] = { g: dyn, em, hl, x, z };
 }
-function lampPost(x, z) {
+function lampPost(x: number, z: number) {
   const y = groundAt(x, z), g = grpAt(x, y, z);
   mesh(cyl(0.07, 0.1, 2.9, 6), lam(0x3f444b), 0, 1.45, 0, g); mesh(bx(0.7, 0.07, 0.07), lam(0x3f444b), 0.3, 2.85, 0, g); mesh(bx(0.3, 0.1, 0.3), lam(0x3f444b), 0.6, 2.72, 0, g);
   mesh(bx(0.24, 0.34, 0.24), glowMat(0xffd98a), 0.6, 2.5, 0, g, true); mesh(new T.ConeGeometry(0.24, 0.2, 4), lam(0x3f444b), 0.6, 2.22, 0, g).rotation.x = Math.PI;
   halo(scene, x + 0.6, y + 2.5, z, 5, 0xffc56a, 0.75, true); halo(scene, x + 0.6, y + 2.5, z, 0.9, 0xffe2a8, 0.5);
 }
-function signpost(x, z, ry, n = 2) {
+function signpost(x: number, z: number, ry: number, n = 2) {
   const g = grpAt(x, groundAt(x, z), z, ry);
   mesh(cyl(0.08, 0.1, 2.6, 6), lam(TIMBER), 0, 1.3, 0, g);
   for (let k = 0; k < n; k++) { const b = mesh(bx(1.3, 0.3, 0.06), lam(0xb88a54), 0.4 * (k % 2 ? -1 : 1), 2.3 - k * 0.42, 0, g); b.rotation.y = k * 1.1; mesh(bx(0.7, 0.05, 0.07), lam(TIMBER), 0.4 * (k % 2 ? -1 : 1), 2.3 - k * 0.42, 0, g).rotation.y = k * 1.1; }
   addCircle(x, z, 0.3);
 }
-function fence(x0, z0, x1, z1, collide = true) {
+function fence(x0: number, z0: number, x1: number, z1: number, collide = true) {
   const len = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.round(len / 1.9)), wood = lam(0xa8743c);
   for (let i = 0; i <= n; i++) { const x = lerp(x0, x1, i / n), z = lerp(z0, z1, i / n); mesh(bx(0.16, 1.15, 0.16), wood, x, groundAt(x, z) + 0.55, z, STATIC); }
   const mx = (x0 + x1) / 2, mz = (z0 + z1) / 2, my = groundAt(mx, mz), horiz = Math.abs(x1 - x0) > Math.abs(z1 - z0);
   for (const h of [0.45, 0.9]) mesh(horiz ? bx(len, 0.1, 0.07) : bx(0.07, 0.1, len), wood, mx, my + h, mz, STATIC);
   if (collide) addBox(Math.min(x0, x1) - 0.15, Math.max(x0, x1) + 0.15, Math.min(z0, z1) - 0.15, Math.max(z0, z1) + 0.15, Math.min(Math.abs(x1 - x0), Math.abs(z1 - z0)) < 0.5 ? my + 1.12 : undefined);
 }
-function barrel(x, z, par?) { const y = groundAt(x, z); mesh(cyl(0.42, 0.38, 1, 10), lam(0x8a5a30), x, y + 0.5, z, par || STATIC); for (const h of [0.22, 0.78]) mesh(cyl(0.44, 0.44, 0.07, 10), lam(0x4a4f57), x, y + h, z, par || STATIC); }
-function crate(x, z, s = 0.9) { const y = groundAt(x, z), c = mesh(bx(s, s, s), lam(0xb07c44), x, y + s / 2, z, STATIC); c.rotation.y = rng(); mesh(bx(s * 1.04, s * 0.12, s * 1.04), lam(0x8a5a30), x, y + s * 0.5, z, STATIC).rotation.y = c.rotation.y; }
+function barrel(x: number, z: number, par?: undefined) { const y = groundAt(x, z); mesh(cyl(0.42, 0.38, 1, 10), lam(0x8a5a30), x, y + 0.5, z, par || STATIC); for (const h of [0.22, 0.78]) mesh(cyl(0.44, 0.44, 0.07, 10), lam(0x4a4f57), x, y + h, z, par || STATIC); }
+function crate(x: number, z: number, s = 0.9) { const y = groundAt(x, z), c = mesh(bx(s, s, s), lam(0xb07c44), x, y + s / 2, z, STATIC); c.rotation.y = rng(); mesh(bx(s * 1.04, s * 0.12, s * 1.04), lam(0x8a5a30), x, y + s * 0.5, z, STATIC).rotation.y = c.rotation.y; }
 
 /* a timber-framed Oakrest house */
 function house(x: number, z: number, w: number, d: number, roofC: number, dz: number, o: HouseOptions = {}) {
   const y = groundAt(x, z), g = grpAt(x, y - 0.1, z), beam = lam(TIMBER), wh = o.h || 3.2, f = 0.85, plaster = lam(o.plaster || PLASTER);
   mesh(bx(w + 0.35, f, d + 0.35), lam(0x8e918b), 0, f / 2, 0, g);
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) mesh(bx(0.55, f + 0.12, 0.55), lam(0x777b76), sx * (w / 2 + 0.1), f / 2 + 0.03, sz * (d / 2 + 0.1), g);
-  const frame = (fw, fd, y0, hh) => {
+  const frame = (fw: number, fd: number, y0: number, hh: number) => {
     mesh(bx(fw - 0.22, hh, fd - 0.22), plaster, 0, y0 + hh / 2, 0, g);
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) mesh(bx(0.26, hh, 0.26), beam, sx * (fw / 2 - 0.12), y0 + hh / 2, sz * (fd / 2 - 0.12), g);
     for (const sz of [-1, 1]) {
@@ -91,7 +91,7 @@ function house(x: number, z: number, w: number, d: number, roofC: number, dz: nu
       for (const sz of [-1, 1]) { const br = mesh(bx(0.12, 1.7, 0.15), beam, sx * (fw / 2 - 0.05), y0 + hh - 0.75, sz * (fd / 2 - 0.75), g); br.rotation.x = -sz * 0.72; }
     }
   };
-  const windowAt = (px, py, pz, ry, shut) => {
+  const windowAt = (px: number, py: number, pz: number, ry: number, shut: number) => {
     const wg = grpAt(px, py, pz, ry, g);
     mesh(bx(0.86, 1.0, 0.1), windowMat, 0, 0, 0, wg, true);
     for (const s of [-1, 1]) { mesh(bx(0.1, 1.16, 0.14), beam, s * 0.48, 0, 0.02, wg, true); mesh(bx(1.06, 0.1, 0.14), beam, 0, s * 0.55, 0.02, wg, true); mesh(bx(0.42, 1.0, 0.06), lam(shut), s * 0.76, 0, 0.05, wg, true); }
@@ -171,7 +171,7 @@ const spirit = new T.Group();
 
 /* ---------- Oakrest village ---------- */
 const VILLAGE = { x: 78, z: 20 };
-let villageFire, windmill;
+let villageFire: THREE.Object3D, windmill: THREE.Object3D;
 {
   const V = VILLAGE, y = groundAt(V.x, V.z);
   house(V.x - 15, V.z - 15, 8, 7, 0xd9682e, 1, { shut: 0x3f7a6a });
@@ -255,7 +255,7 @@ let villageFire, windmill;
 }
 
 /* ---------- Mossfall ruins + goblin camp ---------- */
-let campFire;
+let campFire: THREE.Mesh<THREE.BufferGeometry,THREE.MeshBasicMaterial>;
 {
   arch(-95, 14, 0, true); pillar(-101, 22, 4.2); pillar(-89, 24, 2, 0.6, true, true); pillar(-99, 27, 1.2, 0.6, true, true); pillar(-90, 17, 3.4);
   const rg = grpAt(-95, groundAt(-95, 20), 20);
@@ -280,7 +280,7 @@ let campFire;
 /* ---------- Veilfall ---------- */
 const waterfall = (() => {
   const g = grpAt(0, 0, 0), rg = puffGeo(1, 0.3, true), rock = painted(new T.MeshToonMaterial({ color: 0x8a938e, gradientMap: TOON, vertexColors: true }), 'cliff', 0.12, 0.9);
-  const blob = (x, y, z, sx, sy, sz) => { const m = mesh(rg, rock, x, y, z, g); m.scale.set(sx, sy, sz); m.rotation.set(rng() * 0.6, rng() * 6, rng() * 0.6); };
+  const blob = (x: number, y: number, z: number, sx: number, sy: number, sz: number) => { const m = mesh(rg, rock, x, y, z, g); m.scale.set(sx, sy, sz); m.rotation.set(rng() * 0.6, rng() * 6, rng() * 0.6); };
   blob(-39, 6, -165, 9, 12, 8); blob(-11, 6, -165, 9, 13, 8); blob(-25, 9, -175, 18, 13, 6); blob(-25, 18, -167, 15, 4.4, 9);
   blob(-44, 3, -160, 5, 6, 5); blob(-6, 3, -160, 5, 5, 5); blob(-50, 9, -170, 8, 14, 9); blob(0, 8, -170, 8, 13, 9); blob(-34, 15, -172, 7, 8, 6); blob(-15, 16, -173, 7, 8, 6);
   blob(-33, -0.6, -154.5, 1.6, 1.2, 1.4); blob(-17.5, -0.6, -155, 1.8, 1.3, 1.5); blob(-29, -1, -153, 1, 0.8, 1); blob(-21, -1, -152.6, 1.1, 0.8, 1);
@@ -289,7 +289,7 @@ const waterfall = (() => {
   for (const [tx, tz] of [[-43, -164], [-8, -165], [-30, -170], [-19, -171]]) { mesh(cyl(0.2, 0.3, 3, 6), lam(0x5a3d28), tx, 20.5, tz, g); for (let k = 0; k < 3; k++) { const c = mesh(new T.ConeGeometry(1.6 - k * 0.4, 2.2, 8), lam(0x2f6a45), tx, 22 + k * 1.3, tz, g); } }
   for (let k = 0; k < 8; k++) mesh(cyl(0.04, 0.04, 3 + rng() * 4, 4), lam(VINE), -33 + (k < 4 ? k * 0.5 : 13.5 + k * 0.4), 13 - rng() * 2, -158.2, g, true);
   addBox(-48, -31.5, -173, -158); addBox(-18.5, -2, -173, -158); addBox(-48, -2, -180, -171);
-  const mk = (rep, a) => { const c = makeCanvas(64, 256), x = c.getContext('2d'); x.clearRect(0, 0, 64, 256); x.fillStyle = `rgba(214,244,250,${a})`; x.fillRect(0, 0, 64, 256); for (let i = 0; i < 70; i++) { x.fillStyle = `rgba(255,255,255,${0.35 + rng() * 0.6})`; const w = 1 + rng() * 4, px = rng() * 64, py = rng() * 256, hh = 30 + rng() * 90; for (const oy of [-256, 0]) x.fillRect(px, py + oy, w, hh); } for (let i = 0; i < 40; i++) { x.fillStyle = `rgba(90,180,210,${0.15 + rng() * 0.3})`; x.fillRect(rng() * 64, rng() * 256, 1 + rng() * 2, 20 + rng() * 60); } const t = new T.CanvasTexture(c); t.wrapS = t.wrapT = T.RepeatWrapping; t.repeat.set(rep, 1); return t; };
+  const mk = (rep: number, a: number) => { const c = makeCanvas(64, 256), x = c.getContext('2d'); x.clearRect(0, 0, 64, 256); x.fillStyle = `rgba(214,244,250,${a})`; x.fillRect(0, 0, 64, 256); for (let i = 0; i < 70; i++) { x.fillStyle = `rgba(255,255,255,${0.35 + rng() * 0.6})`; const w = 1 + rng() * 4, px = rng() * 64, py = rng() * 256, hh = 30 + rng() * 90; for (const oy of [-256, 0]) x.fillRect(px, py + oy, w, hh); } for (let i = 0; i < 40; i++) { x.fillStyle = `rgba(90,180,210,${0.15 + rng() * 0.3})`; x.fillRect(rng() * 64, rng() * 256, 1 + rng() * 2, 20 + rng() * 60); } const t = new T.CanvasTexture(c); t.wrapS = t.wrapT = T.RepeatWrapping; t.repeat.set(rep, 1); return t; };
   const tx = mk(3, 0.9), tx2 = mk(5, 0.0);
   const fall = mesh(new T.PlaneGeometry(13, 19, 1, 6), new T.MeshBasicMaterial({ map: tx, transparent: true, opacity: 0.9, side: T.DoubleSide }), -25, WATER_Y + 9.3, -158.4, scene, true);
   { const p = fall.geometry.attributes.position; for (let i = 0; i < p.count; i++) p.setZ(i, smooth(9.5, -9.5, p.getY(i)) * 1.1); }
@@ -306,7 +306,7 @@ const waterfall = (() => {
 
 /* ---------- Temple of Echoes ---------- */
 const gates: Record<string, any> = {}, temple: Record<string, any> = {};
-function wallBox(x0, x1, z0, z1, h = 7, collide = true) {
+function wallBox(x0: number, x1: number, z0: number, z1: number, h = 7, collide = true) {
   const w = Math.abs(x1 - x0), d = Math.abs(z1 - z0), cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, long = Math.max(w, d), alongX = w > d;
   mesh(bx(w, h, d), lam(STONE), cx, 3 + h / 2, cz, STATIC); mesh(bx(w + 0.35, 0.8, d + 0.35), lam(STONE_D), cx, 3.4, cz, STATIC); mesh(bx(w + 0.3, 0.3, d + 0.3), lam(STONE_D), cx, 3 + h - 0.6, cz, STATIC);
   const n = Math.floor(long / 2.6);
@@ -314,13 +314,13 @@ function wallBox(x0, x1, z0, z1, h = 7, collide = true) {
   if (long > 30) for (let i = 0; i < n; i += 4) { const t = (i + 0.5) / n - 0.5; for (const s of [-1, 1]) { const px = cx + (alongX ? t * w : s * (w / 2 + 0.05)), pz = cz + (alongX ? s * (d / 2 + 0.05) : t * d); mesh(cyl(0.05, 0.05, 2.5 + (i % 3), 4), lam(VINE), px, 3 + h - 1.6 - (i % 3) * 0.5, pz, STATIC, true); if (i % 8 === 0) mesh(alongX ? bx(1.2, h * 0.75, 0.7) : bx(0.7, h * 0.75, 1.2), lam(STONE_D), px, 3 + h * 0.37, pz, STATIC); } }
   if (collide) addBox(x0, x1, z0, z1);
 }
-function gate(id, X, color) {
+function gate(id: string, X: number, color: number) {
   const m = mesh(bx(0.8, 7, 6), lam(0x717d77), X, 6.5, TP.zc);
   for (const s of [-1, 1]) { mesh(bx(0.06, 5.6, 0.22), glowMat(color), s * 0.42, 0, -2.4, m, true); mesh(bx(0.06, 5.6, 0.22), glowMat(color), s * 0.42, 0, 2.4, m, true); mesh(bx(0.1, 7, 0.3), lam(STONE_D), s * 0.38, 0, 0, m, true); emblem(m, s * 0.46, 0.6, 0, 1.15, color).rotation.y = s * Math.PI / 2; }
   for (const s of [-1, 1]) { mesh(bx(1.5, 7.6, 1), lam(STONE_D), X, 6.8, TP.zc + s * 3.4, STATIC); mesh(bx(1.7, 0.4, 1.2), lam(STONE), X, 10.5, TP.zc + s * 3.4, STATIC); }
   gates[id] = { mesh: m, box: addBox(X - 0.6, X + 0.6, TP.zc - 3, TP.zc + 3), open: false, X, hl: halo(scene, X, 7.1, TP.zc, 7, color, 0.3) };
 }
-function symbolTex(i) {
+function symbolTex(i: number) {
   const c = makeCanvas(128, 128), x = c.getContext('2d'); x.clearRect(0, 0, 128, 128);
   x.strokeStyle = x.fillStyle = '#aefff0'; x.lineWidth = 8; x.lineCap = 'round'; x.shadowColor = '#7ff3e0'; x.shadowBlur = 14;
   if (i === 0) { x.beginPath(); x.arc(64, 64, 22, 0, 6.3); x.fill(); for (let k = 0; k < 8; k++) { const a = k / 8 * 6.283; x.beginPath(); x.moveTo(64 + Math.cos(a) * 34, 64 + Math.sin(a) * 34); x.lineTo(64 + Math.cos(a) * 50, 64 + Math.sin(a) * 50); x.stroke(); } }
@@ -392,8 +392,8 @@ const SYMBOLS = ['Sun', 'Moon', 'Star', 'Leaf'], SYM_TEX = [0, 1, 2, 3].map(symb
   emblem(scene, -160.9, 8.5, TP.zc, 2.6, RUNE).rotation.y = Math.PI / 2; halo(scene, -160.5, 8.5, TP.zc, 12, RUNE, 0.25);
 }
 /* ---------- Oakrest composition: paved square and streets, bell tower, gate walls, bunting, planters ---------- */
-const PAVED = [];
-function paved(x, z) {
+const PAVED: any[] = [];
+function paved(x: number, z: number) {
   for (let i = 0; i < PAVED.length; i++) { const p = PAVED[i];
     if (p.length === 3) { if (Math.hypot(x - p[0], z - p[1]) < p[2]) return true; }
     else { const vx = p[2] - p[0], vz = p[3] - p[1], t = clamp(((x - p[0]) * vx + (z - p[1]) * vz) / (vx * vx + vz * vz), 0, 1); if (Math.hypot(x - p[0] - vx * t, z - p[1] - vz * t) < p[4]) return true; } }
@@ -402,12 +402,12 @@ function paved(x, z) {
 {
   const V = VILLAGE, y = groundAt(V.x, V.z), vr = mulberry(4242), g = grpAt(0, 0, 0);
   const cob = painted(lam(0xb9b09a), 'stone', 0.5, 0.95), cobD = painted(lam(0x8f8776), 'stone', 0.5, 0.95);
-  const flat = (geo, m, x, z, dy) => { const o = mesh(geo, m, x, y + dy, z, g, true); o.receiveShadow = true; return o; };
+  const flat = (geo: THREE.BufferGeometry, m: THREE.Material, x: number, z: number, dy: number) => { const o = mesh(geo, m, x, y + dy, z, g, true); o.receiveShadow = true; return o; };
   // the square: two rings of paving around the well
   flat(cyl(9.6, 9.6, 0.07, 32), cob, V.x, V.z, 0.03); flat(cyl(3.6, 3.6, 0.09, 24), cobD, V.x, V.z, 0.04);
   flat(new T.TorusGeometry(9.6, 0.22, 4, 40), cobD, V.x, V.z, 0.06).rotation.x = Math.PI / 2; flat(new T.TorusGeometry(6.4, 0.12, 4, 36), cobD, V.x, V.z, 0.07).rotation.x = Math.PI / 2;
   PAVED.push([V.x, V.z, 9.9]);
-  const street = (x0, z0, x1, z1, wd) => {
+  const street = (x0: number, z0: number, x1: number, z1: number, wd: number) => {
     const len = Math.hypot(x1 - x0, z1 - z0), a = Math.atan2(z1 - z0, x1 - x0), m = flat(bx(len, 0.06, wd), cob, (x0 + x1) / 2, (z0 + z1) / 2, 0.028); m.rotation.y = -a;
     for (const s of [-1, 1]) for (let d = 0.4; d < len; d += 0.9 + vr() * 0.5) { const k = flat(bx(0.5 + vr() * 0.3, 0.12, 0.34), cobD, x0 + Math.cos(a) * d - Math.sin(a) * s * wd / 2, z0 + Math.sin(a) * d + Math.cos(a) * s * wd / 2, 0.05); k.rotation.y = -a + (vr() - 0.5) * 0.3; }
     PAVED.push([x0, z0, x1, z1, wd / 2 + 0.35]);
@@ -437,7 +437,7 @@ function paved(x, z) {
   addBox(tx - 2.3, tx + 2.3, tz - 2.3, tz + 2.3);
 
   // low stone walls flanking the west gate
-  const wallArc = (a0, a1) => { const R = 30.5, n = Math.round(Math.abs(a1 - a0) * R / 1.5); for (let i = 0; i <= n; i++) { const a = lerp(a0, a1, i / n), wx = V.x + Math.cos(a) * R, wz = V.z + Math.sin(a) * R, wy = groundAt(wx, wz); const b = mesh(bx(0.7, 0.95 + vr() * 0.25, 1.7), i % 2 ? st : sd, wx, wy + 0.45, wz, g); b.rotation.y = -a; if (i % 3 === 0) mesh(bx(0.85, 0.14, 1.2), lam(MOSS), wx, wy + 1.0, wz, g, true).rotation.y = -a; addCircle(wx, wz, 0.62); } };
+  const wallArc = (a0: number, a1: number) => { const R = 30.5, n = Math.round(Math.abs(a1 - a0) * R / 1.5); for (let i = 0; i <= n; i++) { const a = lerp(a0, a1, i / n), wx = V.x + Math.cos(a) * R, wz = V.z + Math.sin(a) * R, wy = groundAt(wx, wz); const b = mesh(bx(0.7, 0.95 + vr() * 0.25, 1.7), i % 2 ? st : sd, wx, wy + 0.45, wz, g); b.rotation.y = -a; if (i % 3 === 0) mesh(bx(0.85, 0.14, 1.2), lam(MOSS), wx, wy + 1.0, wz, g, true).rotation.y = -a; addCircle(wx, wz, 0.62); } };
   wallArc(2.53, 2.95); wallArc(3.33, 3.9);
 
   // bunting from the well roof to four poles at the edge of the square

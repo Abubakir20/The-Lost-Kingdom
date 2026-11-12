@@ -50,7 +50,7 @@ function insideBox(x: number, z: number, pad: number): boolean {
 
 /* ---------- materials: cel shading with a soft three-band ramp ---------- */
 const TOON = (() => { const v = [46, 46, 96, 170, 236, 255], d = new Uint8Array(24); v.forEach((s, i) => { d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = s; d[i * 4 + 3] = 255; }); const t = new T.DataTexture(d, 6, 1, T.RGBAFormat); t.minFilter = t.magFilter = T.NearestFilter; t.generateMipmaps = false; t.needsUpdate = true; return t; })();
-const _mats = {};
+const _mats: Record<string, any> = {};   // material cache, keyed by kind + colour + options
 const lam = (c: number, o?: THREE.MeshToonMaterialParameters): THREE.MeshToonMaterial => { const k = 'l' + c + (o ? JSON.stringify(o) : ''); return _mats[k] || (_mats[k] = new T.MeshToonMaterial(Object.assign({ color: c, gradientMap: TOON }, o))); };
 const glowMat = (c: number, o?: THREE.MeshBasicMaterialParameters): THREE.MeshBasicMaterial => { const k = 'g' + c + (o ? JSON.stringify(o) : ''); return _mats[k] || (_mats[k] = new T.MeshBasicMaterial(Object.assign({ color: c }, o))); };
 function mesh<M extends THREE.Material>(geo: THREE.BufferGeometry, material: M, x: number, y: number, z: number, parent?: THREE.Object3D, noShadow?: boolean): THREE.Mesh<THREE.BufferGeometry, M> {
@@ -63,22 +63,23 @@ const bx = (w: number, h: number, d: number) => new T.BoxGeometry(w, h, d);
 const cyl = (rt: number, rb: number, h: number, s = 8) => new T.CylinderGeometry(rt, rb, h, s);
 const sph = (r: number, w = 10, h = 8) => new T.SphereGeometry(r, w, h);
 const STONE = 0x929b93, STONE_D = 0x717d77, MOSS = 0x6f9a45, RUNE = 0x7ff3e0, GOLD = 0xe8c36a, TIMBER = 0x6e4226;
-function makeCanvas(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+function makeCanvas(w: number, h: number) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
 const glowTex = (() => { const c = makeCanvas(64, 64), x = c.getContext('2d'), g = x.createRadialGradient(32, 32, 0, 32, 32, 32); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.25, 'rgba(255,255,255,.55)'); g.addColorStop(0.6, 'rgba(255,255,255,.12)'); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.fillRect(0, 0, 64, 64); return new T.CanvasTexture(c); })();
-const nightHalos = [];
+const nightHalos: THREE.Sprite[] = [];
 /* soft additive glow; night=true makes it fade in after dusk */
-function halo(parent, x, y, z, size, color, op = 0.55, night?) {
+function halo(parent: THREE.Scene|THREE.Group|THREE.Mesh<THREE.BufferGeometry,THREE.MeshBasicMaterial>, x: number, y: number, z: number, size: number, color: number, op = 0.55, night?: boolean) {
   const s = new T.Sprite(new T.SpriteMaterial({ map: glowTex, color, transparent: true, opacity: night ? 0 : op, blending: T.AdditiveBlending, depthWrite: false }));
   s.position.set(x, y, z); s.scale.set(size, size, 1); (parent || scene).add(s); if (night) { s.userData.op = op; nightHalos.push(s); } return s;
 }
 /* static scenery is merged per material once it is built: far fewer draw calls */
-function bake(group, shadow = true) {
+function bake(group: THREE.Group, shadow = true) {
   group.updateMatrixWorld(true);
-  const by = new Map(), keep = [];
-  group.traverse(o => { if (o.isSprite || o.isLight) { keep.push(o); return; } if (!o.isMesh) return; if (o.userData.live) { keep.push(o); return; } const k = o.material.uuid + (o.castShadow ? 's' : 'n'); if (!by.has(k)) by.set(k, { mat: o.material, cast: o.castShadow, list: [] }); by.get(k).list.push(o); });
+  const by = new Map(), keep: any[] = [];
+  // meshes, sprites and lights are told apart by their is* flags
+  group.traverse((o: any) => { if (o.isSprite || o.isLight) { keep.push(o); return; } if (!o.isMesh) return; if (o.userData.live) { keep.push(o); return; } const k = o.material.uuid + (o.castShadow ? 's' : 'n'); if (!by.has(k)) by.set(k, { mat: o.material, cast: o.castShadow, list: [] }); by.get(k).list.push(o); });
   const out = new T.Group();
   for (const b of by.values()) {
-    let n = 0; const parts = b.list.map(o => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone(); g.applyMatrix4(o.matrixWorld); n += g.attributes.position.count; return g; });
+    let n = 0; const parts = b.list.map((o: { geometry: { index: any; toNonIndexed: () => any; clone: () => any; }; matrixWorld: any; }) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone(); g.applyMatrix4(o.matrixWorld); n += g.attributes.position.count; return g; });
     const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3), vc = b.mat.vertexColors ? new Float32Array(n * 3).fill(1) : null; let off = 0;
     for (const g of parts) { pos.set(g.attributes.position.array, off); if (g.attributes.normal) nor.set(g.attributes.normal.array, off); if (vc && g.attributes.color) vc.set(g.attributes.color.array, off); off += g.attributes.position.count * 3; g.dispose(); }
     const mg = new T.BufferGeometry(); mg.setAttribute('position', new T.BufferAttribute(pos, 3)); mg.setAttribute('normal', new T.BufferAttribute(nor, 3)); if (vc) mg.setAttribute('color', new T.BufferAttribute(vc, 3));
@@ -91,7 +92,7 @@ function bake(group, shadow = true) {
 
 /* ---------- painted textures (generated for the game, embedded as data URIs) ---------- */
 const PAINT: Record<string, PaintedTexture> = {};
-function paintTex(name) {
+function paintTex(name: string) {
   if (PAINT[name]) return PAINT[name];
   const src = (window.TLK_TEX || {})[name], img = new Image(), t = new T.Texture(img) as PaintedTexture, gain = new T.Vector3(1, 1, 1);
   t.wrapS = t.wrapT = T.RepeatWrapping; t.anisotropy = 8; t.triGain = gain;
@@ -138,7 +139,7 @@ function painted(mat: THREE.Material, name: string, scale: number, amount = 0.9,
 }
 
 /* ---------- sky ---------- */
-const skyU = { top: { value: new T.Color(0x3f8fe0) }, bot: { value: new T.Color(0xbfe6f5) }, sunDir: { value: new T.Vector3(0, 1, 0) }, sunCol: { value: new T.Color(0xfff2d6) }, glow: { value: 1 }, pano: { value: null }, panoAmt: { value: 0 }, panoTint: { value: new T.Color(0xffffff) } };
+const skyU = { top: { value: new T.Color(0x3f8fe0) }, bot: { value: new T.Color(0xbfe6f5) }, sunDir: { value: new T.Vector3(0, 1, 0) }, sunCol: { value: new T.Color(0xfff2d6) }, glow: { value: 1 }, pano: { value: null as THREE.Texture | null }, panoAmt: { value: 0 }, panoTint: { value: new T.Color(0xffffff) } };
 { const src = (window.TLK_ART || {}).sky; if (src) { const img = new Image(), t = new T.Texture(img); t.wrapS = T.MirroredRepeatWrapping; t.wrapT = T.ClampToEdgeWrapping; t.minFilter = T.LinearFilter; t.generateMipmaps = false; img.onload = () => { t.needsUpdate = true; skyU.pano.value = t; skyU.panoAmt.value = 1; }; img.src = src; } }
 const sky = new T.Mesh(new T.SphereGeometry(1900, 32, 16), new T.ShaderMaterial({
   uniforms: skyU, side: T.BackSide, depthWrite: false,
@@ -156,7 +157,7 @@ const sky = new T.Mesh(new T.SphereGeometry(1900, 32, 16), new T.ShaderMaterial(
     'gl_FragColor=vec4(c,1.0);}'].join('\n'),
 }));
 scene.add(sky);
-const clouds = [], cloudMat = new T.MeshBasicMaterial({ vertexColors: true, fog: false });
+const clouds: THREE.Object3D[] = [], cloudMat = new T.MeshBasicMaterial({ vertexColors: true, fog: false });
 {
   const cg = new T.SphereGeometry(1, 12, 8), cp = cg.attributes.position, cc = new Float32Array(cp.count * 3);
   for (let i = 0; i < cp.count; i++) { const k = smooth(-0.9, 0.6, cp.getY(i)); cc[i * 3] = lerp(0.84, 1, k); cc[i * 3 + 1] = lerp(0.88, 1, k); cc[i * 3 + 2] = lerp(0.97, 1, k); }
@@ -179,7 +180,7 @@ const stars = (() => {
 const farMat = new T.MeshLambertMaterial({ vertexColors: true, fog: false });
 {
   const g = new T.Group();
-  const peak = (a, r, hgt, wid, tone) => {
+  const peak = (a: number, r: number, hgt: number, wid: number, tone: number) => {
     const geo = new T.ConeGeometry(wid, hgt, 9, 5).toNonIndexed(), p = geo.attributes.position, c = new Float32Array(p.count * 3);
     for (let i = 0; i < p.count; i++) {
       const x = p.getX(i), y = p.getY(i), z = p.getZ(i), k = (y + hgt / 2) / hgt, j = 1 + 0.28 * Math.sin(x * 0.07 + y * 0.05 + a * 7) * Math.cos(z * 0.06 + a * 3);
@@ -194,7 +195,7 @@ const farMat = new T.MeshLambertMaterial({ vertexColors: true, fog: false });
   for (let i = 0; i < 16; i++) { const a = i / 16 * 6.283 + rng() * 0.3; peak(a, 1050 + rng() * 150, 380 + rng() * 260, 240 + rng() * 120, 1.12); }
   // the ruined citadel of Eldoria, far to the north-east: a promise of the regions to come
   const cm = new T.MeshBasicMaterial({ color: 0x5f7fa8, fog: false }), cx = 430, cz = -520;
-  const cb = (w, h, d, x, y, z) => { const m = new T.Mesh(bx(w, h, d), cm); m.position.set(cx + x, y + h / 2 + 40, cz + z); g.add(m); };
+  const cb = (w: number, h: number, d: number, x: number, y: number, z: number) => { const m = new T.Mesh(bx(w, h, d), cm); m.position.set(cx + x, y + h / 2 + 40, cz + z); g.add(m); };
   cb(120, 60, 80, 0, 0, 0); cb(26, 150, 26, -30, 40, 0); cb(18, 96, 18, 34, 40, 10); cb(14, 70, 14, 4, 50, -24); cb(40, 26, 40, -30, 190, 0);
   { const sp = new T.Mesh(new T.ConeGeometry(22, 70, 6), cm); sp.position.set(cx - 30, 40 + 216 + 35, cz); g.add(sp); const s2 = new T.Mesh(new T.ConeGeometry(13, 44, 6), cm); s2.position.set(cx + 34, 40 + 136 + 22, cz + 10); g.add(s2); }
   halo(g, cx - 30, 300, cz, 150, 0xff6a5a, 0.5);
@@ -216,7 +217,7 @@ const SKY_KEYS = [ // time, zenith, horizon, sun colour, sun, hemi, ground bounc
 const _c1 = new T.Color(), _c2 = new T.Color();
 let nightAmt = 0, rainAmt = 0, flashAmt = 0;
 const windowMat = new T.MeshToonMaterial({ color: 0x4a6a86, gradientMap: TOON, emissive: 0xffc56a, emissiveIntensity: 0 });
-function updateSky(time, focus) {
+function updateSky(time: number, focus: THREE.Vector3) {
   let i = 0; while (i < SKY_KEYS.length - 2 && time > SKY_KEYS[i + 1][0]) i++;
   const a = SKY_KEYS[i], b = SKY_KEYS[i + 1], t = smooth(0, 1, clamp((time - a[0]) / (b[0] - a[0] || 1), 0, 1));
   skyU.top.value.copy(_c1.setHex(a[1])).lerp(_c2.setHex(b[1]), t);
@@ -247,13 +248,13 @@ function updateSky(time, focus) {
   windowMat.emissiveIntensity = nightAmt * 0.95;
   for (let k = 0; k < nightHalos.length; k++) nightHalos[k].material.opacity = nightHalos[k].userData.op * nightAmt;
 }
-const QUALITY_SETS = { low: { grass: 0.3, shadow: 0, pr: 1, fog: 270, veg: 85, post: false }, medium: { grass: 0.65, shadow: 1024, pr: 1.5, fog: 330, veg: 115, post: true }, high: { grass: 1, shadow: 2048, pr: 2, fog: 370, veg: 150, post: true } };
+const QUALITY_SETS: Record<string, QualitySet> = { low: { grass: 0.3, shadow: 0, pr: 1, fog: 270, veg: 85, post: false }, medium: { grass: 0.65, shadow: 1024, pr: 1.5, fog: 330, veg: 115, post: true }, high: { grass: 1, shadow: 2048, pr: 2, fog: 370, veg: 150, post: true } };
 let QUALITY = QUALITY_SETS.medium;
 
 /* ---------- terrain ---------- */
 const MAPN = 220, COLGRID = new Float32Array(MAPN * MAPN * 3);
 { const c = [0, 0, 0]; for (let j = 0; j < MAPN; j++) for (let i = 0; i < MAPN; i++) { const wx = (i + 0.5) / MAPN * WORLD * 2 - WORLD, wz = (j + 0.5) / MAPN * WORLD * 2 - WORLD; terrainColor(wx, wz, terrainH(wx, wz), c); COLGRID.set(c, (j * MAPN + i) * 3); } }
-function gridColor(x, z, out) { const i = clamp(((x + WORLD) / (WORLD * 2) * MAPN) | 0, 0, MAPN - 1), j = clamp(((z + WORLD) / (WORLD * 2) * MAPN) | 0, 0, MAPN - 1), k = (j * MAPN + i) * 3; out[0] = COLGRID[k]; out[1] = COLGRID[k + 1]; out[2] = COLGRID[k + 2]; }
+function gridColor(x: number, z: number, out: number[]) { const i = clamp(((x + WORLD) / (WORLD * 2) * MAPN) | 0, 0, MAPN - 1), j = clamp(((z + WORLD) / (WORLD * 2) * MAPN) | 0, 0, MAPN - 1), k = (j * MAPN + i) * 3; out[0] = COLGRID[k]; out[1] = COLGRID[k + 1]; out[2] = COLGRID[k + 2]; }
 const terrain = (() => {
   const SEG = 220, g = new T.PlaneGeometry(WORLD * 2, WORLD * 2, SEG, SEG); g.rotateX(-Math.PI / 2);
   const pos = g.attributes.position, col = new Float32Array(pos.count * 3), c = [0, 0, 0];
@@ -287,7 +288,7 @@ const causticTex = (() => {
   }
   x.putImageData(im, 0, 0); const t = new T.CanvasTexture(c); t.wrapS = t.wrapT = T.RepeatWrapping; return t;
 })();
-const waterU = { tCaust: { value: causticTex }, uSky: { value: new T.Color(0xc4eaf8) }, uShallow: { value: new T.Color(0x66dcd2) }, uDeep: { value: new T.Color(0x1b86ad) }, uDay: { value: 1 } };
+const waterU: Record<string, { value: any }> = { tCaust: { value: causticTex }, uSky: { value: new T.Color(0xc4eaf8) }, uShallow: { value: new T.Color(0x66dcd2) }, uDeep: { value: new T.Color(0x1b86ad) }, uDay: { value: 1 } };
 const water = (() => {
   const SEG = 150, g = new T.PlaneGeometry(WORLD * 2, WORLD * 2, SEG, SEG); g.rotateX(-Math.PI / 2);
   const pos = g.attributes.position, dep = new Float32Array(pos.count);
@@ -339,16 +340,16 @@ const mapCanvas = (() => {
 })();
 
 /* ---------- chunked instancing: every cell is frustum- and distance-culled ---------- */
-const chunkSets = [];
-function chunked(geo: THREE.BufferGeometry, mat: THREE.Material, items: any[], cell: number, o: ChunkOptions = {}) {
+const chunkSets: { meshes: any[]; dist: number; grass: boolean; total: number; }[] = [];
+function chunked(geo: THREE.BufferGeometry, mat: THREE.Material, items: ChunkItem[], cell: number, o: ChunkOptions = {}) {
   const buckets = new Map(), dummy = new T.Object3D(), col = new T.Color();
   for (const it of items) { const k = Math.floor((it.x + WORLD) / cell) + ',' + Math.floor((it.z + WORLD) / cell); if (!buckets.has(k)) buckets.set(k, []); buckets.get(k).push(it); }
   geo.boundingSphere = new T.Sphere(new T.Vector3(0, o.cy || 6, 0), cell * 0.71 + (o.extent || 4));
-  const set = { meshes: [], dist: o.dist || 0, grass: !!o.grass, total: items.length };
+  const set = { meshes: [] as THREE.InstancedMesh[], dist: o.dist || 0, grass: !!o.grass, total: items.length };
   for (const [k, list] of buckets) {
     const [ci, cj] = k.split(',').map(Number), cx = (ci + 0.5) * cell - WORLD, cz = (cj + 0.5) * cell - WORLD;
     const m = new T.InstancedMesh(geo, mat, list.length); m.position.set(cx, 0, cz);
-    list.forEach((it, i) => {
+    list.forEach((it: ChunkItem, i: number) => {
       dummy.position.set(it.x - cx, it.y, it.z - cz); dummy.rotation.set(it.rx || 0, it.ry || 0, it.rz || 0); dummy.scale.set(it.sx, it.sy == null ? it.sx : it.sy, it.sz == null ? it.sx : it.sz); dummy.updateMatrix(); m.setMatrixAt(i, dummy.matrix);
       if (it.c) m.setColorAt(i, col.setRGB(it.c[0], it.c[1], it.c[2]));
     });
@@ -358,12 +359,12 @@ function chunked(geo: THREE.BufferGeometry, mat: THREE.Material, items: any[], c
   chunkSets.push(set); return set;
 }
 let chunkT = 0;
-function updateChunks(dt, cam) {
+function updateChunks(dt: number, cam: THREE.Vector3) {
   chunkT -= dt; if (chunkT > 0) return; chunkT = 0.25;
   for (const s of chunkSets) { if (!s.dist) continue; const lim = s.dist * (s.grass ? QUALITY.veg / 115 : 1); for (const m of s.meshes) m.visible = Math.hypot(m.userData.cx - cam.x, m.userData.cz - cam.z) < lim; }
 }
-function windify(mat, amp, grassLike?) {
-  mat.onBeforeCompile = sh => {
+function windify(mat: THREE.MeshLambertMaterial, amp: number, grassLike?: boolean) {
+  mat.onBeforeCompile = (sh: THREE.Shader) => {
     sh.uniforms.uTime = windU;
     sh.vertexShader = 'uniform float uTime;\n' + sh.vertexShader.replace('#include <begin_vertex>',
       ['#include <begin_vertex>', '#ifdef USE_INSTANCING',
@@ -376,7 +377,7 @@ function windify(mat, amp, grassLike?) {
   return mat;
 }
 /* organic blob with smooth normals and a built-in light-to-dark gradient */
-function puffGeo(detail, rough, flat?) {
+function puffGeo(detail: number, rough: number, flat?: boolean) {
   const g = new T.IcosahedronGeometry(1, detail), p = g.attributes.position, n = g.attributes.normal, c = new Float32Array(p.count * 3);
   for (let i = 0; i < p.count; i++) {
     const x = p.getX(i), y = p.getY(i), z = p.getZ(i), f = 1 + rough * (Math.sin(x * 3.1 + y * 1.7 + 1) * Math.cos(z * 2.9 - y * 2.1) + 0.5 * Math.sin(y * 5.3 + x * 4.1));
@@ -386,7 +387,7 @@ function puffGeo(detail, rough, flat?) {
   g.setAttribute('color', new T.BufferAttribute(c, 3)); if (flat) g.computeVertexNormals(); return g;
 }
 const GIANTS = [[-150, 25], [-135, 62], [-105, 96], [-150, -102], [-70, 112], [-160, 72], [-95, -102], [-62, -122]];
-function plantBlocked(x, z, pad) {
+function plantBlocked(x: number, z: number, pad: number) {
   if (inTemple(x, z, pad + 1.5)) return true;
   if (insideBox(x, z, pad)) return true;
   for (const f of FLATS) if (f !== FLATS[2] && f !== FLATS[3] && Math.hypot(x - f.x, z - f.z) < f.r * (f === FLATS[1] ? 0.95 : 0.85)) return true;
@@ -398,8 +399,8 @@ function plantBlocked(x, z, pad) {
   for (const g of GIANTS) if (Math.hypot(x - g[0], z - g[1]) < 5) return true;
   return false;
 }
-const hsl = (h, s, l) => { _c1.setHSL(h, s, l); return [_c1.r, _c1.g, _c1.b]; };
-let grass, TREES = [];
+const hsl = (h: number, s: number, l: number) => { _c1.setHSL(h, s, l); return [_c1.r, _c1.g, _c1.b]; };
+let grass: any, TREES: { x: number; z: number; h: number; type: string; s: number; west: boolean; }[] = [];
 /* vegetation is planted after the buildings exist, so nothing grows through a wall */
 function buildVegetation() {
   /* --- trees --- */
@@ -434,7 +435,7 @@ function buildVegetation() {
       else if (t.west) { hue = 0.35 + rng() * 0.07; sat = 0.55; li = 0.29 + rng() * 0.07; }
       else { hue = 0.26 + rng() * 0.06; sat = 0.62; li = 0.38 + rng() * 0.08; }
       const R = birch ? 1.25 : 1.9, top = t.h + th;
-      const put = (ox, oy, oz, r, dl) => puffs.push({ leaf: 1, x: t.x + ox * s, y: top + oy * s, z: t.z + oz * s, rx: rng() * 0.5, ry: rng() * 6.283, sx: r * s, sy: r * s * 0.8, sz: r * s, c: hsl(hue + (rng() - 0.5) * 0.02, sat, li + dl) });
+      const put = (ox: number, oy: number, oz: number, r: number, dl: number) => puffs.push({ leaf: 1, x: t.x + ox * s, y: top + oy * s, z: t.z + oz * s, rx: rng() * 0.5, ry: rng() * 6.283, sx: r * s, sy: r * s * 0.8, sz: r * s, c: hsl(hue + (rng() - 0.5) * 0.02, sat, li + dl) });
       put(0, 0.7, 0, R, 0);
       const n = birch ? 2 : 3 + (rng() * 2 | 0);
       for (let k = 0; k < n; k++) { const a = ry + k / n * 6.283; put(Math.cos(a) * R * 0.75, 0.1 + rng() * 0.7, Math.sin(a) * R * 0.75, R * (0.6 + rng() * 0.2), -0.04 + rng() * 0.03); }
@@ -571,7 +572,7 @@ const partGeo = new T.BufferGeometry();
 partGeo.setAttribute('position', new T.BufferAttribute(part.p, 3)); partGeo.setAttribute('color', new T.BufferAttribute(part.c, 3));
 for (let i = 0; i < PART_N; i++) part.p[i * 3 + 1] = -999;
 const partPts = new T.Points(partGeo, new T.PointsMaterial({ size: 0.34, map: glowTex, vertexColors: true, transparent: true, opacity: 0.95, depthWrite: false, alphaTest: 0.02 })); partPts.frustumCulled = false; scene.add(partPts);
-function burst(x, y, z, color, n = 10, speed = 4, life = 0.6, grav = 9) {
+function burst(x: number, y: number, z: number, color: number, n = 10, speed = 4, life = 0.6, grav = 9) {
   _c1.setHex(color);
   for (let k = 0; k < n; k++) {
     const i = part.i = (part.i + 1) % PART_N, a = Math.random() * 6.283, u = Math.random() * 2 - 1, s = speed * (0.4 + Math.random() * 0.6), q = Math.sqrt(1 - u * u);
@@ -581,12 +582,12 @@ function burst(x, y, z, color, n = 10, speed = 4, life = 0.6, grav = 9) {
   }
 }
 /* slow drifting puff: chimney smoke, mist, dust */
-function puff(x, y, z, color, vx, vy, vz, life) {
+function puff(x: number, y: number, z: number, color: number, vx: number, vy: number, vz: number, life: number) {
   _c1.setHex(color); const i = part.i = (part.i + 1) % PART_N;
   part.p[i * 3] = x; part.p[i * 3 + 1] = y; part.p[i * 3 + 2] = z; part.v[i * 3] = vx; part.v[i * 3 + 1] = vy; part.v[i * 3 + 2] = vz;
   part.c[i * 3] = _c1.r; part.c[i * 3 + 1] = _c1.g; part.c[i * 3 + 2] = _c1.b; part.life[i] = life; part.grav[i] = 0;
 }
-function updateParticles(dt) {
+function updateParticles(dt: number) {
   for (let i = 0; i < PART_N; i++) {
     if (part.life[i] <= 0) continue;
     part.life[i] -= dt;
@@ -597,7 +598,7 @@ function updateParticles(dt) {
   partGeo.attributes.position.needsUpdate = true; partGeo.attributes.color.needsUpdate = true;
 }
 /* drifting motes around the camera: pollen by day, fireflies after dusk, petals and leaves on the wind */
-function driftField(n, size, color, box) {
+function driftField(n: number, size: number, color: number, box: number) {
   const a = new Float32Array(n * 3), ph = new Float32Array(n); for (let i = 0; i < n; i++) { a[i * 3] = rand(-box, box); a[i * 3 + 1] = rand(0.3, box * 0.45); a[i * 3 + 2] = rand(-box, box); ph[i] = Math.random() * 6.283; }
   const g = new T.BufferGeometry(); g.setAttribute('position', new T.BufferAttribute(a, 3));
   const p = new T.Points(g, new T.PointsMaterial({ size, map: glowTex, color, transparent: true, opacity: 0.8, depthWrite: false, blending: T.AdditiveBlending })); p.frustumCulled = false; scene.add(p);
@@ -605,7 +606,7 @@ function driftField(n, size, color, box) {
 }
 const motes = driftField(260, 0.16, 0xfff6c8, 26), petals = driftField(90, 0.22, 0xffc4dc, 22);
 petals.p.material.blending = T.NormalBlending;
-function updateDrift(dt, focus, t) {
+function updateDrift(dt: number, focus: THREE.Vector3, t: number) {
   for (const f of [motes, petals]) {
     const fall = f === petals;
     for (let i = 0; i < f.n; i++) {
@@ -627,7 +628,7 @@ for (let i = 0; i < RAIN_N; i++) { rainSeed[i * 3] = rand(-28, 28); rainSeed[i *
 rainGeo.setAttribute('position', new T.BufferAttribute(rainPos, 3));
 const rain = new T.LineSegments(rainGeo, new T.LineBasicMaterial({ color: 0xcfe4f4, transparent: true, opacity: 0.5, depthWrite: false })); rain.frustumCulled = false; rain.visible = false; scene.add(rain);
 let weather = { raining: false, next: 170, bolt: 8 };
-function updateWeather(dt, focus) {
+function updateWeather(dt: number, focus: THREE.Vector3) {
   weather.next -= dt;
   if (weather.next <= 0) { weather.raining = !weather.raining; weather.next = weather.raining ? rand(55, 95) : rand(180, 320); }
   rainAmt = clamp(rainAmt + (weather.raining ? dt : -dt) * 0.22, 0, 1);
@@ -646,7 +647,7 @@ function updateWeather(dt, focus) {
 /* ---------- post-processing: soft bloom and a gentle film grade (skipped on Low) ---------- */
 const POST = (() => {
   const vs = 'varying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position.xy,0.0,1.0);}';
-  const mk = (uniforms, fs) => new T.ShaderMaterial({ uniforms, vertexShader: vs, fragmentShader: fs, depthTest: false, depthWrite: false });
+  const mk = (uniforms: Record<string, { value: any }>, fs: string) => new T.ShaderMaterial({ uniforms, vertexShader: vs, fragmentShader: fs, depthTest: false, depthWrite: false });
   const bright = mk({ t: { value: null }, px: { value: new T.Vector2() } }, 'uniform sampler2D t;uniform vec2 px;varying vec2 vUv;void main(){vec3 c=texture2D(t,vUv+px*vec2(-1.,-1.)).rgb+texture2D(t,vUv+px*vec2(1.,-1.)).rgb+texture2D(t,vUv+px*vec2(-1.,1.)).rgb+texture2D(t,vUv+px*vec2(1.,1.)).rgb;c*=0.25;float l=max(c.r,max(c.g,c.b));gl_FragColor=vec4(c*smoothstep(0.8,1.15,l),1.);}');
   const blur = mk({ t: { value: null }, d: { value: new T.Vector2() } }, 'uniform sampler2D t;uniform vec2 d;varying vec2 vUv;void main(){vec3 c=texture2D(t,vUv).rgb*0.227;c+=(texture2D(t,vUv+d*1.4).rgb+texture2D(t,vUv-d*1.4).rgb)*0.316;c+=(texture2D(t,vUv+d*3.3).rgb+texture2D(t,vUv-d*3.3).rgb)*0.07;gl_FragColor=vec4(c,1.);}');
   const fin = mk({ t: { value: null }, b: { value: null }, amt: { value: 0.36 } }, ['uniform sampler2D t;uniform sampler2D b;uniform float amt;varying vec2 vUv;',
@@ -657,7 +658,7 @@ const POST = (() => {
     'vec2 q=vUv-0.5;c*=1.0-dot(q,q)*0.42;',
     'gl_FragColor=vec4(c,1.);}'].join('\n'));
   const cam = new T.OrthographicCamera(-1, 1, 1, -1, 0, 1), quad = new T.Mesh(new T.PlaneGeometry(2, 2), fin), sc = new T.Scene(); quad.frustumCulled = false; sc.add(quad);
-  const size = new T.Vector2(); let main = null, ra = null, rb = null, on = false, w = 0, h = 0;
+  const size = new T.Vector2(); let main: THREE.WebGLRenderTarget = null, ra: THREE.WebGLRenderTarget = null, rb: THREE.WebGLRenderTarget = null, on = false, w = 0, h = 0;
   function alloc() {
     renderer.getDrawingBufferSize(size); if (main && size.x === w && size.y === h) return; w = size.x; h = size.y;
     for (const r of [main, ra, rb]) if (r) r.dispose();
@@ -665,11 +666,11 @@ const POST = (() => {
     main = renderer.capabilities.isWebGL2 ? new T.WebGLMultisampleRenderTarget(w, h, o) : new T.WebGLRenderTarget(w, h, o);
     const bw = Math.max(2, w >> 2), bh = Math.max(2, h >> 2), ob = Object.assign({ depthBuffer: false }, o); ra = new T.WebGLRenderTarget(bw, bh, ob); rb = new T.WebGLRenderTarget(bw, bh, ob);
   }
-  const pass = (m, target) => { quad.material = m; renderer.setRenderTarget(target); renderer.render(sc, cam); };
+  const pass = (m: THREE.ShaderMaterial, target: THREE.WebGLRenderTarget | null) => { quad.material = m; renderer.setRenderTarget(target); renderer.render(sc, cam); };
   renderer.info.autoReset = false;
   return {
     get on() { return on; },
-    enable(v) { on = !!v; const vg = document.getElementById('vignette'); if (vg) vg.style.display = on ? 'none' : ''; canvas.style.filter = on ? 'none' : ''; },
+    enable(v: boolean) { on = !!v; const vg = document.getElementById('vignette'); if (vg) vg.style.display = on ? 'none' : ''; canvas.style.filter = on ? 'none' : ''; },
     render() {
       renderer.info.reset();
       if (!on) { renderer.setRenderTarget(null); renderer.render(scene, camera); return; }

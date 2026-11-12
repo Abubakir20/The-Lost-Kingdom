@@ -1,37 +1,37 @@
 /* ============ systems: items, quests, dialogue, NPCs, interactables, puzzles, UI ============ */
 let MODE = 'menu';
-const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const esc = (s: string) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 /* ---------- feedback ---------- */
-function notify(text, cls?) {
+function notify(text: string, cls?: string) {
   const box = $('notes'), el = document.createElement('div'); el.className = 'note ' + (cls || ''); el.textContent = text; box.appendChild(el);
   while (box.children.length > 5) box.removeChild(box.firstChild);
   setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 500); }, 3600);
 }
 let bannerT = 0;
-function banner(title, sub) { $('bannerT').textContent = title; $('bannerS').textContent = sub || ''; $('banner').classList.add('show'); bannerT = 3.6; }
+function banner(title: string, sub: string) { $('bannerT').textContent = title; $('bannerS').textContent = sub || ''; $('banner').classList.add('show'); bannerT = 3.6; }
 const _pv = new T.Vector3();
-function dmgText(x, y, z, text, cls) {
+function dmgText(x: number, y: number, z: number, text: string, cls: string) {
   _pv.set(x, y, z).project(camera); if (_pv.z > 1) return;
   const el = document.createElement('div'); el.className = 'dmg ' + (cls || ''); el.textContent = text;
   el.style.left = ((_pv.x * 0.5 + 0.5) * 100 + rand(-1.5, 1.5)) + '%'; el.style.top = ((-_pv.y * 0.5 + 0.5) * 100) + '%';
   $('dmgLayer').appendChild(el); setTimeout(() => el.remove(), 800);
 }
 function flashHurt() { const h = $('hurt'); h.classList.remove('on'); void h.offsetWidth; h.classList.add('on'); }
-function fade(cb) { const f = $('fade'); f.classList.add('on'); setTimeout(() => { cb(); setTimeout(() => f.classList.remove('on'), 120); }, 380); }
+function fade(cb: () => void) { const f = $('fade'); f.classList.add('on'); setTimeout(() => { cb(); setTimeout(() => f.classList.remove('on'), 120); }, 380); }
 
 /* ---------- items & progression ---------- */
-function giveItem(id, n = 1, quiet?) { G.inv[id] = (G.inv[id] || 0) + n; if (!quiet) notify('+' + n + ' ' + ITEMS[id].n, 'gain'); if (id === 'herb') questEvent('herb'); }
-function giveCoins(n) { G.p.coins += n; notify('+' + n + ' coins', 'gain'); }
-function takeItem(id, n = 1) { G.inv[id] = Math.max(0, (G.inv[id] || 0) - n); if (!G.inv[id]) delete G.inv[id]; }
-function gainXp(n) {
+function giveItem(id: string, n = 1, quiet?: undefined) { G.inv[id] = (G.inv[id] || 0) + n; if (!quiet) notify('+' + n + ' ' + ITEMS[id].n, 'gain'); if (id === 'herb') questEvent('herb'); }
+function giveCoins(n: number) { G.p.coins += n; notify('+' + n + ' coins', 'gain'); }
+function takeItem(id: string, n = 1) { G.inv[id] = Math.max(0, (G.inv[id] || 0) - n); if (!G.inv[id]) delete G.inv[id]; }
+function gainXp(n: number) {
   const S = G.p; S.xp += n;
   while (S.xp >= xpNeed(S.level)) {
     S.xp -= xpNeed(S.level); S.level++; S.maxHp += 10; S.maxSt += 5; S.maxMp += 5; S.hp = S.maxHp; S.st = S.maxSt;
     banner('Level ' + S.level, 'Health, stamina and strength have grown'); sfx('quest');
   }
 }
-function useItem(id) {
+function useItem(id: string) {
   if (!has(id) || PL.dead) return false; const S = G.p;
   if (id === 'potion') { if (S.hp >= S.maxHp) { notify('You are already at full health.'); return false; } S.hp = Math.min(S.maxHp, S.hp + 50); }
   else if (id === 'berry') { if (S.hp >= S.maxHp) { notify('You are already at full health.'); return false; } S.hp = Math.min(S.maxHp, S.hp + 12); }
@@ -39,21 +39,21 @@ function useItem(id) {
   else return false;
   takeItem(id); sfx('heal'); burst(PL.pos.x, PL.pos.y + 1.2, PL.pos.z, 0x8fe08a, 12, 2.5, 0.7, -2); return true;
 }
-function craft(i) {
+function craft(i: number) {
   const r = RECIPES[i]; for (const k in r.need) if (!has(k, r.need[k])) { notify('You are missing materials.'); sfx('deny'); return; }
   for (const k in r.need) takeItem(k, r.need[k]); giveItem(r.out, r.n); sfx('pickup');
 }
-function setWeapon(w) { if (w === 'bow' && !G.p.hasBow) { notify('You do not have a bow yet.'); return; } if (G.p.weapon !== w) { G.p.weapon = w; PL.hold = -1; PL.draw = -1; sfx('step'); } }
+function setWeapon(w: string) { if (w === 'bow' && !G.p.hasBow) { notify('You do not have a bow yet.'); return; } if (G.p.weapon !== w) { G.p.weapon = w; PL.hold = -1; PL.draw = -1; sfx('step'); } }
 
 /* ---------- quests ---------- */
 const SHARD_CHESTS = ['c_camp', 'c_mesa', 'c_islet'];
 const shardCount = () => SHARD_CHESTS.filter(c => G.flags[c]).length;
 const trialCount = () => (G.flags.puz1 ? 1 : 0) + (G.flags.puz2 ? 1 : 0) + (G.flags.puz3 ? 1 : 0);
-const QUESTS = {
+const QUESTS: Record<string, QuestDef> = {
   awaken: { name: 'A Voice in the Stone', kind: 'Main quest', desc: 'You woke beside an old shrine with no memory. Something there is calling to you.', reward: 'A direction',
     obj: () => [['Speak with the spirit at the Shrine of Awakening', false]], target: () => [0, 58.5] },
   road: { name: 'The Road to Oakrest', kind: 'Main quest', desc: 'Ilyra asked you to find Elder Maren in Oakrest, east along the dirt road.', reward: 'Ashwood bow, 15 arrows, 50 XP',
-    obj: s => [['Follow the road east to Oakrest', s.stage >= 1], ['Speak with Elder Maren', false]], target: () => [NPCS.maren.pos.x, NPCS.maren.pos.z] },
+    obj: (s: { stage: number; }) => [['Follow the road east to Oakrest', s.stage >= 1], ['Speak with Elder Maren', false]], target: () => [NPCS.maren.pos.x, NPCS.maren.pos.z] },
   shards: { name: 'Shards of the Sunstone', kind: 'Main quest', desc: 'Three shards of the Sunstone were scattered across Greenwind Valley: one in the goblin camp south-west of the bridge, one on the high rock north of Oakrest, one on a drowned islet upriver.', reward: 'Temple Key, Ember Bolt, 100 XP',
     obj: () => [['Find the Sunstone Shards (' + shardCount() + '/3)', shardCount() >= 3], ['Return to Elder Maren', false]],
     target: () => { if (shardCount() >= 3) return [NPCS.maren.pos.x, NPCS.maren.pos.z]; const c = CHESTS[SHARD_CHESTS.find(k => !G.flags[k])]; return [c.x, c.z]; } },
@@ -61,14 +61,14 @@ const QUESTS = {
     obj: () => [['Unseal the temple gate beyond the Old Stonebridge', !!G.flags.g_entry], ['Solve the three trials (' + trialCount() + '/3)', trialCount() >= 3], ['Defeat the Ancient Forest Guardian', !!G.flags.boss], ['Take the Heart of the Forest', !!G.flags.c_boss], ['Return to Ilyra at the Shrine of Awakening', false]],
     target: () => !G.flags.g_entry ? [-75.5, -40] : !G.flags.puz1 ? [-90, -33] : !G.flags.puz2 ? [-106, -46] : !G.flags.puz3 ? [-121, -40] : !G.flags.c_boss ? [-145, -40] : [0, 58.5] },
   goblins: { name: 'Clubs and Anvils', kind: 'Side quest', desc: 'Borin the smith wants the thicket goblins thinned out before they steal another cartload of ore.', reward: 'Oakrest steel edge (+6 sword damage), 40 coins',
-    obj: s => [['Defeat thicket goblins (' + Math.min(4, s.n) + '/4)', s.n >= 4], ['Return to Borin', false]], target: s => s.n >= 4 ? [NPCS.borin.pos.x, NPCS.borin.pos.z] : [-85, 70] },
+    obj: (s: { n: number; }) => [['Defeat thicket goblins (' + Math.min(4, s.n) + '/4)', s.n >= 4], ['Return to Borin', false]], target: (s: { n: number; }) => s.n >= 4 ? [NPCS.borin.pos.x, NPCS.borin.pos.z] : [-85, 70] },
   herbs: { name: 'Silver for a Fever', kind: 'Side quest', desc: 'Tessa’s stock of silverleaf is gone. The pale herb grows near old stones and in the western woods.', reward: '3 Healing Draughts, 30 coins',
     obj: () => [['Gather silverleaf (' + Math.min(4, G.inv.herb || 0) + '/4)', has('herb', 4)], ['Bring it to Tessa', false]], target: () => has('herb', 4) ? [NPCS.tessa.pos.x, NPCS.tessa.pos.z] : [-95, 20] },
 };
-const qState = id => (G.q[id] ? G.q[id].s : null);
-function qStart(id) { if (G.q[id]) return; G.q[id] = { s: 'active', n: 0, stage: 0 }; notify('New quest: ' + QUESTS[id].name, 'quest'); sfx('questStart'); autosave(); }
-function qDone(id) { if (!G.q[id] || G.q[id].s === 'done') return; G.q[id].s = 'done'; banner('Quest complete', QUESTS[id].name); sfx('quest'); autosave(); }
-function questEvent(ev) {
+const qState = (id: string) => (G.q[id] ? G.q[id].s : null);
+function qStart(id: string) { if (G.q[id]) return; G.q[id] = { s: 'active', n: 0, stage: 0 }; notify('New quest: ' + QUESTS[id].name, 'quest'); sfx('questStart'); autosave(); }
+function qDone(id: string) { if (!G.q[id] || G.q[id].s === 'done') return; G.q[id].s = 'done'; banner('Quest complete', QUESTS[id].name); sfx('quest'); autosave(); }
+function questEvent(ev: string) {
   if (ev === 'goblin' && qState('goblins') === 'active') { const s = G.q.goblins; if (s.n < 4) { s.n++; notify('Goblins defeated: ' + s.n + '/4', 'quest'); } }
 }
 function trackedQuest() {
@@ -77,24 +77,25 @@ function trackedQuest() {
 }
 function currentObjective() {
   const id = trackedQuest(); if (!id) return null;
-  const list = QUESTS[id].obj(G.q[id]), cur = list.find(o => !o[1]) || list[list.length - 1];
+  const list = QUESTS[id].obj(G.q[id]), cur = list.find((o: any[]) => !o[1]) || list[list.length - 1];
   return { id, name: QUESTS[id].name, text: cur[0], target: QUESTS[id].target(G.q[id]) };
 }
 
 /* ---------- dialogue ---------- */
-let dlg = null;
-function talk(who, pages, done?) { dlg = { who, pages, i: 0, done }; setMode('dialog'); renderDlg(); }
-function pickOpt(k) { if (!dlg) return; const pg = dlg.pages[dlg.i]; if (!pg.opts || !pg.opts[k]) return; const cur = dlg, fn = pg.opts[k][1]; sfx('ui'); if (fn) fn(); if (dlg === cur) advanceDlg(true); }
-function advanceDlg(force?) {
-  if (!dlg) return; const pg = dlg.pages[dlg.i]; if (pg.opts && !force) return;
+let dlg: Dialog | null = null;
+function talk(who: string, pages: DialogPage[], done?: () => void) { dlg = { who, pages, i: 0, done }; setMode('dialog'); renderDlg(); }
+const pageOpts = (pg: DialogPage) => typeof pg === 'string' ? undefined : pg.opts;
+function pickOpt(k: number) { if (!dlg) return; const opts = pageOpts(dlg.pages[dlg.i]); if (!opts || !opts[k]) return; const cur = dlg, fn = opts[k][1]; sfx('ui'); if (fn) fn(); if (dlg === cur) advanceDlg(true); }
+function advanceDlg(force?: boolean) {
+  if (!dlg) return; if (pageOpts(dlg.pages[dlg.i]) && !force) return;
   dlg.i++; sfx('ui');
   if (dlg.i >= dlg.pages.length) { const d = dlg; dlg = null; setMode('play'); if (d.done) d.done(); } else renderDlg();
 }
 
 /* ---------- interactables ---------- */
-const interactables = [];
-function addInteract(o) { interactables.push(o); return o; }
-let nearInteract = null;
+const interactables: any[] = [];
+function addInteract(o: Interactable) { interactables.push(o); return o; }
+let nearInteract: Interactable | null = null;
 function findInteract() {
   let best = null, bd = 1e9;
   for (const it of interactables) {
@@ -106,7 +107,7 @@ function findInteract() {
 
 /* chests */
 const CHESTS: Record<string, Chest> = {};
-function chest(id, x, z, items, coins, rot = 0, hidden?) {
+function chest(id: string, x: number, z: number, items: Record<string, number>, coins: number, rot = 0, hidden?: boolean) {
   const y = Math.max(groundAt(x, z), WATER_Y + 0.3), g = new T.Group(); g.position.set(x, y, z); g.rotation.y = rot; scene.add(g);
   mesh(bx(1.2, 0.6, 0.8), lam(0x8a5a30), 0, 0.3, 0, g); mesh(bx(1.26, 0.1, 0.86), lam(GOLD), 0, 0.6, 0, g);
   const lid = new T.Group(); lid.position.set(0, 0.62, -0.4); g.add(lid);
@@ -134,8 +135,8 @@ chest('c_vill', 59.5, 40.2, { arrow: 10 }, 0, 1.57);
 chest('c_boss', -145, -40, { heart: 1 }, 100, Math.PI / 2, true);
 
 /* gatherables */
-const NODES = [];
-function node(kind, x, z) {
+const NODES: any[] = [];
+function node(kind: string, x: number, z: number) {
   const y = groundAt(x, z), g = new T.Group(), id = 'n' + NODES.length; g.position.set(x, y, z); scene.add(g);
   let item, label, n = 1;
   if (kind === 'herb') { item = 'herb'; label = 'Gather silverleaf'; for (let i = 0; i < 5; i++) { const a = i / 5 * 6.283; const l = mesh(new T.ConeGeometry(0.1, 0.55, 4), lam(0xcfe8d8), Math.cos(a) * 0.18, 0.3, Math.sin(a) * 0.18, g, true); l.rotation.set(Math.sin(a) * 0.5, 0, -Math.cos(a) * 0.5); } mesh(sph(0.08, 5, 4), glowMat(0xeafff6), 0, 0.62, 0, g, true); }
@@ -146,7 +147,7 @@ function node(kind, x, z) {
   NODES.push({ id, g });
   addInteract({ x, z, r: 2.2, label: () => G.flags[id] ? null : label, act: () => { G.flags[id] = true; g.visible = false; giveItem(item, n); sfx('pickup'); burst(x, y + 0.5, z, 0xbfffd0, 6, 2, 0.5); } });
 }
-function scatter(kind, n, cx, cz, rad) {
+function scatter(kind: string, n: number, cx: number, cz: number, rad: number) {
   let placed = 0;
   for (let i = 0; i < n * 30 && placed < n; i++) {
     const a = rng() * 6.283, r = Math.sqrt(rng()) * rad, x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r;
@@ -170,7 +171,7 @@ const RELICS = [[102, 39.5], [-140, 34], [-23, -168.5], [15, 140], [BRIDGE.x + 2
 });
 
 /* inscriptions */
-function tablet(id, x, z, rot, pages) {
+function tablet(id: string, x: number, z: number, rot: number, pages: string[]) {
   const y = groundAt(x, z), g = new T.Group(); g.position.set(x, y, z); g.rotation.y = rot; scene.add(g);
   mesh(bx(1.5, 1.9, 0.35), lam(STONE_D), 0, 0.95, 0, g).rotation.x = -0.12;
   for (let i = 0; i < 4; i++) mesh(bx(1.1 - (i % 2) * 0.3, 0.07, 0.04), glowMat(RUNE), 0, 1.5 - i * 0.28, 0.2 - (1.5 - i * 0.28) * 0.12 + 0.11, g, true);
@@ -193,18 +194,18 @@ addInteract({ x: -76.4, z: -40, r: 3.2, label: () => G.flags.g_entry ? null : (h
   takeItem('key'); G.flags.g_entry = true; sfx('gate'); banner('The seal breaks', 'The Temple of Echoes is open'); autosave();
 } });
 addInteract({ x: -80.9, z: -28, r: 2.4, label: () => G.flags.puz1 ? null : 'Touch the rune (returns the stone block)', act: () => { setBlock(temple.blockHome[0], temple.blockHome[1]); sfx('gate'); } });
-temple.pillars.forEach(pl => addInteract({ x: pl.x, z: pl.z, r: 2.6, label: () => G.flags.puz2 ? null : 'Turn the pillar (' + SYMBOLS[pilState(pl.i)] + ')', act: () => {
+temple.pillars.forEach((pl: { x: number; z: number; i: number; spin: number }) => addInteract({ x: pl.x, z: pl.z, r: 2.6, label: () => G.flags.puz2 ? null : 'Turn the pillar (' + SYMBOLS[pilState(pl.i)] + ')', act: () => {
   G.flags['pil' + pl.i] = (pilState(pl.i) + 1) % 4; sfx('stone'); pl.spin = 1;
   if (pilState(0) === 0 && pilState(1) === 3 && pilState(2) === 1) solvePuzzle('puz2', 'The watchers agree');
 } }));
 const PIL_INIT = [2, 1, 3];
-function pilState(i) { const v = G.flags['pil' + i]; return typeof v === 'number' ? v : PIL_INIT[i]; }
-function solvePuzzle(flag, text) { if (G.flags[flag]) return; G.flags[flag] = true; sfx('quest'); sfx('gate'); banner('Trial complete', text); gainXp(40); autosave(); }
+function pilState(i: number) { const v = G.flags['pil' + i]; return typeof v === 'number' ? v : PIL_INIT[i]; }
+function solvePuzzle(flag: string, text: string) { if (G.flags[flag]) return; G.flags[flag] = true; sfx('quest'); sfx('gate'); banner('Trial complete', text); gainXp(40); autosave(); }
 function puzzle3Check() {
-  temple.braziers.forEach((b, i) => { if (b.lit) G.flags['br' + i] = true; }); if (temple.eye.lit) G.flags.eye = true; sfx('fire');
-  if (temple.braziers.every(b => b.lit) && temple.eye.lit) solvePuzzle('puz3', 'Flame and arrow');
+  temple.braziers.forEach((b: Record<string, any>, i: string) => { if (b.lit) G.flags['br' + i] = true; }); if (temple.eye.lit) G.flags.eye = true; sfx('fire');
+  if (temple.braziers.every((b: Record<string, any>) => b.lit) && temple.eye.lit) solvePuzzle('puz3', 'Flame and arrow');
 }
-function updateTemple(dt, instant?) {
+function updateTemple(dt: number, instant?: boolean) {
   const b = temple.blockBox, bcx = (b.x0 + b.x1) / 2, bcz = (b.z0 + b.z1) / 2;
   const onPlate = Math.hypot(bcx + 90, bcz + 33) < 1.3, pressed = onPlate || (Math.hypot(PL.pos.x + 90, PL.pos.z + 33) < 1.25 && PL.grounded);
   if (onPlate && !G.flags.puz1) solvePuzzle('puz1', 'The weight of stone');
@@ -230,7 +231,7 @@ function npc(id: string, name: string, look: HumanoidLook, x: number, z: number,
   addInteract({ ref: n.pos, r: 2.9, label: () => 'Talk to ' + name, act: () => { n.yaw = Math.atan2(PL.pos.x - n.pos.x, PL.pos.z - n.pos.z); n.g.rotation.y = n.yaw; talkFn(n); } });
   return n;
 }
-function updateNPCs(dt) {
+function updateNPCs(dt: number) {
   const night = G.time > 0.8 || G.time < 0.22;
   for (const id in NPCS) {
     const n = NPCS[id]; n.anim += dt; let moving = false;
@@ -313,7 +314,7 @@ npc('borin', 'Borin', { skin: 0xb07850, top: 0x8a3a2e, bottom: 0x3a3028, hair: 0
   up();
 });
 npc('tessa', 'Tessa', { skin: 0xe0b08a, top: 0x3f7a6a, bottom: 0x5a4630, hair: 0x8a4a20, style: 'long', hat: 'straw', apron: 0xf2ead8, skirt: 0x8a3a2e }, 69, 24.4, null, () => {
-  const opts = [['Show me your goods.', () => openPanel('shop')]];
+  const opts: DialogOption[] = [['Show me your goods.', () => openPanel('shop')]];
   if (!G.q.herbs) opts.push(['You look worried.', () => talk('Tessa', ['Pip has a fever and I am out of silverleaf. It grows near old stones, mostly west of the river.', 'Bring me four and I’ll brew three draughts for you from my own stock.'], () => qStart('herbs'))]);
   else if (qState('herbs') === 'active') opts.push(['About the silverleaf…', () => { if (has('herb', 4)) talk('Tessa', ['Four good stems. Thank you. Truly.'], () => { takeItem('herb', 4); qDone('herbs'); giveItem('potion', 3); giveCoins(30); gainXp(50); }); else talk('Tessa', ['Four stems is what the brew needs. You have ' + (G.inv.herb || 0) + '. Try the Mossfall ruins past the bridge.']); }]);
   if (has('relic', 5) && !G.flags.relicSold) opts.push(['I found five Eldorian relics.', () => talk('Tessa', ['A full set of royal seals? I know a collector who will weep. Here, 150 coins, and keep them. They suit you better.'], () => { G.flags.relicSold = true; giveCoins(150); gainXp(80); })]);
@@ -326,7 +327,7 @@ npc('halric', 'Halric', { skin: 0xc98f6a, top: 0x6a7480, bottom: 0x2a3a50, hair:
     ['Any advice for a traveller?', () => talk('Halric', ['Raise your shield with the right mouse button and face what’s hitting you. Roll with F when the big ones wind up.', 'Boars leave you alone if you leave them alone. Roast one with deadwood and it’ll put you back on your feet.'])],
     ['Stay safe.', null]] }]);
 });
-{ const pip = npc('pip', 'Pip', { skin: 0xe0b08a, top: 0xe8c36a, bottom: 0x5a7a4a, hair: 0x8a4a20, hat: 'cap', hatC: 0xc8452f, headScale: 1.2, s: 0.66 }, 80, 16, [[82, 17], [81, 23.5], [75, 23], [74.5, 16.5]], n => {
+{ const pip = npc('pip', 'Pip', { skin: 0xe0b08a, top: 0xe8c36a, bottom: 0x5a7a4a, hair: 0x8a4a20, hat: 'cap', hatC: 0xc8452f, headScale: 1.2, s: 0.66 }, 80, 16, [[82, 17], [81, 23.5], [75, 23], [74.5, 16.5]], (n: { li: number; }) => {
   const lines = ['I saw something shiny under the old bridge! But I can’t swim yet.', 'There’s a cave behind the big waterfall up north. Halric says I made it up. I didn’t.', 'Someone left a chest behind our house. I’m not allowed to open it.', 'The stranger by the bridge draws maps of places that aren’t there anymore.'];
   n.li = ((n.li || 0) + 1) % lines.length; talk('Pip', [lines[n.li]]);
 }); pip.speed = 3.4; pip.pause = 0.6; }
@@ -340,7 +341,7 @@ npc('carto', 'The Cartographer', { skin: 0x9a7a6a, top: 0x2f3b45, bottom: 0x2229
 
 /* ---------- world events ---------- */
 let discT = 0;
-function updateDiscovery(dt) {
+function updateDiscovery(dt: number) {
   discT -= dt; if (discT > 0) return; discT = 0.5;
   for (const L of LOCS) {
     if (Math.hypot(PL.pos.x - L.x, PL.pos.z - L.z) < L.r) {
@@ -353,12 +354,12 @@ function regionName() {
   if (inTemple(PL.pos.x, PL.pos.z)) return 'Temple of Echoes';
   return PL.pos.x < riverX(PL.pos.z) - 10 ? 'Edge of the Forgotten Forest' : 'Greenwind Valley';
 }
-function travelTo(id) {
+function travelTo(id: string) {
   const L = LOCS.find(l => l.id === id); if (!L || !L.way || !G.disc[id]) return;
   if (bossFight) { notify('The waystones are silent while the Guardian is awake.'); return; }
   closePanel(); fade(() => { placePlayer(L.way[0] + 1.6, L.way[1] + 1.6); G.p.respawn = id; sfx('discover'); autosave(); });
 }
-function placePlayer(x, z) { PL.pos.set(x, groundAt(x, z), z); PL.vel.set(0, 0, 0); PL.grounded = true; PL.lock = null; PL.swim = false; CARRY.snap(); updateCamera(0.016, true); }
+function placePlayer(x: number, z: number) { PL.pos.set(x, groundAt(x, z), z); PL.vel.set(0, 0, 0); PL.grounded = true; PL.lock = null; PL.swim = false; CARRY.snap(); updateCamera(0.016, true); }
 function playerDied() {
   if (PL.dead) return; PL.dead = true; PL.atk = null; PL.hold = -1; PL.draw = -1; sfx('die');
   setTimeout(() => { if (PL.dead) setMode('dead'); }, 900);
@@ -367,7 +368,7 @@ function respawn() {
   const L = LOCS.find(l => l.id === G.p.respawn) || LOCS[0];
   fade(() => { G.p.hp = G.p.maxHp; G.p.st = G.p.maxSt; G.p.mp = G.p.maxMp; PL.dead = false; PL.iframes = 2; bossReset(); for (const e of enemies) if (e.alive && !e.def.boss) { e.aggro = false; e.state = 'return'; } placePlayer(L.way[0] + 1.6, L.way[1] + 1.6); setMode('play'); });
 }
-function bossDefeated(e) {
+function bossDefeated(e: Enemy) {
   G.flags.boss = true; bossFight = false; clearHazards(); sfx('roar'); hitStop = 0.25;
   const c = CHESTS.c_boss, ex = e.pos.x, ez = e.pos.z, a0 = Math.atan2(PL.pos.z - ez, PL.pos.x - ex);
   timeScale = 0.3;
@@ -384,7 +385,7 @@ function syncWorld() {
   for (const n of NODES) n.g.visible = !G.flags[n.id];
   for (const r of RELICS) r.m.visible = !G.flags[r.id];
   const bl = Array.isArray(G.flags.blk) ? G.flags.blk : temple.blockHome; setBlock(bl[0], bl[1]);
-  temple.braziers.forEach((b, i) => b.lit = !!G.flags['br' + i]); temple.eye.lit = !!G.flags.eye;
+  temple.braziers.forEach((b: Record<string, any>, i: string) => b.lit = !!G.flags['br' + i]); temple.eye.lit = !!G.flags.eye;
   for (const e of enemies) if (!e.def.boss) reviveEnemy(e);
   for (const d of drops) scene.remove(d.m); drops.length = 0; for (const pr of projs) killProj(pr);
   bossReset();
@@ -394,8 +395,8 @@ function syncWorld() {
 }
 
 /* ---------- panels ---------- */
-let panelTab = null, shopOpen = false;
-function openPanel(tab) { if (MODE !== 'play' && MODE !== 'panel' && MODE !== 'dialog') return; if (MODE === 'dialog') { dlg = null; } shopOpen = tab === 'shop'; panelTab = tab; setMode('panel'); renderPanel(); sfx('ui'); }
+let panelTab: string = null, shopOpen = false;
+function openPanel(tab: string) { if (MODE !== 'play' && MODE !== 'panel' && MODE !== 'dialog') return; if (MODE === 'dialog') { dlg = null; } shopOpen = tab === 'shop'; panelTab = tab; setMode('panel'); renderPanel(); sfx('ui'); }
 function closePanel() { if (MODE === 'panel') { panelTab = null; shopOpen = false; setMode('play'); } }
 $('panel').addEventListener('click', ev => {
   const b = (ev.target as HTMLElement).closest<HTMLElement>('[data-act]'); if (!b) return; const [a, v] = b.dataset.act.split(':'), S = G.p;
@@ -410,7 +411,7 @@ $('panel').addEventListener('click', ev => {
   renderPanel();
 });
 /* ---------- floating health bars over wounded foes ---------- */
-const ebarPool = [];
+const ebarPool: HTMLDivElement[] = [];
 function updateEnemyBars() {
   let n = 0; const layer = $('ebars'), W = window.innerWidth || 1280, H = window.innerHeight || 720;
   if (MODE === 'play' && !cine) for (const e of enemies) {

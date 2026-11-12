@@ -599,7 +599,7 @@ function insideBox(x, z, pad) {
 }
 /* ---------- materials: cel shading with a soft three-band ramp ---------- */
 const TOON = (() => { const v = [46, 46, 96, 170, 236, 255], d = new Uint8Array(24); v.forEach((s, i) => { d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = s; d[i * 4 + 3] = 255; }); const t = new T.DataTexture(d, 6, 1, T.RGBAFormat); t.minFilter = t.magFilter = T.NearestFilter; t.generateMipmaps = false; t.needsUpdate = true; return t; })();
-const _mats = {};
+const _mats = {}; // material cache, keyed by kind + colour + options
 const lam = (c, o) => { const k = 'l' + c + (o ? JSON.stringify(o) : ''); return _mats[k] || (_mats[k] = new T.MeshToonMaterial(Object.assign({ color: c, gradientMap: TOON }, o))); };
 const glowMat = (c, o) => { const k = 'g' + c + (o ? JSON.stringify(o) : ''); return _mats[k] || (_mats[k] = new T.MeshBasicMaterial(Object.assign({ color: c }, o))); };
 function mesh(geo, material, x, y, z, parent, noShadow) {
@@ -636,7 +636,8 @@ function halo(parent, x, y, z, size, color, op = 0.55, night) {
 function bake(group, shadow = true) {
     group.updateMatrixWorld(true);
     const by = new Map(), keep = [];
-    group.traverse(o => { if (o.isSprite || o.isLight) {
+    // meshes, sprites and lights are told apart by their is* flags
+    group.traverse((o) => { if (o.isSprite || o.isLight) {
         keep.push(o);
         return;
     } if (!o.isMesh)
@@ -648,7 +649,7 @@ function bake(group, shadow = true) {
     const out = new T.Group();
     for (const b of by.values()) {
         let n = 0;
-        const parts = b.list.map(o => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone(); g.applyMatrix4(o.matrixWorld); n += g.attributes.position.count; return g; });
+        const parts = b.list.map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone(); g.applyMatrix4(o.matrixWorld); n += g.attributes.position.count; return g; });
         const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3), vc = b.mat.vertexColors ? new Float32Array(n * 3).fill(1) : null;
         let off = 0;
         for (const g of parts) {
@@ -1220,7 +1221,7 @@ function updateChunks(dt, cam) {
     }
 }
 function windify(mat, amp, grassLike) {
-    mat.onBeforeCompile = sh => {
+    mat.onBeforeCompile = (sh) => {
         sh.uniforms.uTime = windU;
         sh.vertexShader = 'uniform float uTime;\n' + sh.vertexShader.replace('#include <begin_vertex>', ['#include <begin_vertex>', '#ifdef USE_INSTANCING',
             'vec4 wO=modelMatrix*instanceMatrix*vec4(0.0,0.0,0.0,1.0);',
@@ -2915,16 +2916,16 @@ function humanoid(o) {
         mesh(bx(0.3, 0.03, 0.2), lam(o.hatC || 0x5a7a4a), 0, 0.1, 0.3, p.head);
     }
     for (const [k, s] of [['R', -1], ['L', 1]]) {
-        const a = p['arm' + k] = grpIn(p.chest, s * 0.325, 0.47, 0);
+        const a = p[`arm${k}`] = grpIn(p.chest, s * 0.325, 0.47, 0);
         mesh(HG.sho, sleeve, 0, 0, 0, a);
         mesh(HG.uarm, sleeve, 0, -0.16, 0, a);
-        const e = p['elbow' + k] = grpIn(a, 0, -0.32, 0);
+        const e = p[`elbow${k}`] = grpIn(a, 0, -0.32, 0);
         mesh(HG.farm, o.bare ? skin : sleeve, 0, -0.15, 0, e);
-        const h = p['hand' + k] = grpIn(e, 0, -0.33, 0);
+        const h = p[`hand${k}`] = grpIn(e, 0, -0.33, 0);
         mesh(HG.hand, skin, 0, 0, 0, h);
-        const l = p['leg' + k] = grpIn(p.hips, s * 0.14, 0.85, 0);
+        const l = p[`leg${k}`] = grpIn(p.hips, s * 0.14, 0.85, 0);
         mesh(HG.thigh, bot, 0, -0.21, 0, l);
-        const kn = p['knee' + k] = grpIn(l, 0, -0.43, 0);
+        const kn = p[`knee${k}`] = grpIn(l, 0, -0.43, 0);
         mesh(HG.knee, bot, 0, 0, 0, kn);
         mesh(HG.shin, o.robe != null ? bot : boot, 0, -0.2, 0, kn);
         mesh(HG.boot, boot, 0, -0.39, 0.06, kn);
@@ -3129,14 +3130,14 @@ function outlineMat(th) { if (!OUTLINE[th]) {
     m.customProgramCacheKey = () => 'ol' + th;
     OUTLINE[th] = m;
 } return OUTLINE[th]; }
-function addOutline(g, th = 0.014) { const list = []; g.traverse(o => { if (o.isMesh && o.castShadow && o.material.isMeshToonMaterial && o.geometry.attributes.normal)
+function addOutline(g, th = 0.014) { const list = []; g.traverse((o) => { if (o.isMesh && o.castShadow && o.material.isMeshToonMaterial && o.geometry.attributes.normal)
     list.push(o); }); for (const o of list) {
     const m = new T.Mesh(o.geometry, outlineMat(th));
     m.userData.outline = 1;
     o.add(m);
 } }
 /* give a character its own materials so it can flash when struck */
-function ownMaterials(g) { const map = new Map(), list = []; g.traverse(o => { if (!o.isMesh || !o.material.emissive)
+function ownMaterials(g) { const map = new Map(), list = []; g.traverse((o) => { if (!o.isMesh || !o.material.emissive)
     return; let m = map.get(o.material); if (!m) {
     m = o.material.clone();
     map.set(o.material, m);
@@ -3166,9 +3167,9 @@ scene.add(hero.g);
     mesh(new T.SphereGeometry(0.16, 9, 6, 0, 6.3, 0, 1.6), lam(LEATHER), 0.02, 0.03, 0, p.armL);
     mesh(new T.TorusGeometry(0.15, 0.02, 4, 12), lam(GOLD), 0.02, 0.02, 0, p.armL).rotation.x = Math.PI / 2;
     for (const k of ['L', 'R']) {
-        mesh(cyl(0.088, 0.078, 0.2, 7), lam(LEATHER), 0, -0.2, 0, p['elbow' + k]);
-        mesh(cyl(0.09, 0.09, 0.03, 7), lam(GOLD), 0, -0.11, 0, p['elbow' + k]);
-        mesh(cyl(0.12, 0.1, 0.12, 7), lam(0x6a4a30), 0, -0.08, 0, p['knee' + k]);
+        mesh(cyl(0.088, 0.078, 0.2, 7), lam(LEATHER), 0, -0.2, 0, p[`elbow${k}`]);
+        mesh(cyl(0.09, 0.09, 0.03, 7), lam(GOLD), 0, -0.11, 0, p[`elbow${k}`]);
+        mesh(cyl(0.12, 0.1, 0.12, 7), lam(0x6a4a30), 0, -0.08, 0, p[`knee${k}`]);
     }
     // hair: cap, fringe, side locks, tied tail; a teal band with a gold stud
     mesh(HG.hair, lam(HAIR), 0, 0.05, -0.02, p.head);
@@ -3328,7 +3329,7 @@ const HERO3D = (() => {
         geo.setIndex(new T.BufferAttribute(idx, 1));
         // the old block-built body steps aside; weapons, cape, quiver and glider stay
         const p = hero.p, keep = new Set([hero.cape, hero.quiver, hero.sword, hero.shield, hero.bow, hero.glider].concat(hero.tails));
-        const hideIn = n => { if (keep.has(n))
+        const hideIn = (n) => { if (keep.has(n))
             return; if (n.isMesh) {
             n.visible = false;
             return;
@@ -3338,11 +3339,11 @@ const HERO3D = (() => {
         // joints move to where the sculpt actually bends
         p.head.position.set(0, 0.636, 0);
         for (const [k, s] of [['R', -1], ['L', 1]]) {
-            p['arm' + k].position.set(s * 0.186, 0.498, 0);
-            p['elbow' + k].position.set(0, -0.285, 0);
-            p['hand' + k].position.set(0, -0.36, 0);
-            p['leg' + k].position.set(s * 0.1425, 0.874, -0.015);
-            p['knee' + k].position.set(0, -0.418, 0);
+            p[`arm${k}`].position.set(s * 0.186, 0.498, 0);
+            p[`elbow${k}`].position.set(0, -0.285, 0);
+            p[`hand${k}`].position.set(0, -0.36, 0);
+            p[`leg${k}`].position.set(s * 0.1425, 0.874, -0.015);
+            p[`knee${k}`].position.set(0, -0.418, 0);
         }
         p.zBias = 0.2;
         // a short shaped cape in two hinged panels replaces the flat board; scarf tails slim down to match the sculpted scarf
@@ -4049,7 +4050,7 @@ function animHero(dt) {
 }
 /* ---------- gear: sword, shield and bow rebuilt to real proportions (sword ~1.04 m, shield 0.58 m, bow 1.24 m on a 1.78 m hero) ---------- */
 (() => {
-    const clear = g => { while (g.children.length)
+    const clear = (g) => { while (g.children.length)
         g.remove(g.children[0]); };
     const STEEL = lam(0xe6eef2), GOLDM = lam(GOLD), WOOD = lam(0x9a6436), DARKW = lam(0x6e4226), REDM = lam(0xc8452f), LEATH = lam(0x4f3524), RUNEG = glowMat(0x7ff3e0);
     const zc = (r0, r1, h, n) => cyl(r0, r1, h, n).rotateX(Math.PI / 2); // a cylinder lying along z
@@ -4060,7 +4061,7 @@ function animHero(dt) {
     sw.scale.setScalar(1);
     {
         const st = [[0.115, 0.034, 0.0115], [0.45, 0.031, 0.01], [0.76, 0.026, 0.008], [0.875, 0.016, 0.006], [0.95, 0.0006, 0.0006]], P = [];
-        const ring = q => [[q[1], 0, q[0]], [0, q[2], q[0]], [-q[1], 0, q[0]], [0, -q[2], q[0]]];
+        const ring = (q) => [[q[1], 0, q[0]], [0, q[2], q[0]], [-q[1], 0, q[0]], [0, -q[2], q[0]]];
         for (let i = 0; i < st.length - 1; i++) {
             const a = ring(st[i]), b = ring(st[i + 1]);
             for (let k = 0; k < 4; k++) {
@@ -4117,7 +4118,7 @@ function animHero(dt) {
     bow.position.set(0, -0.085, 0.03);
     bow.scale.setScalar(1);
     {
-        const N = 30, SEG = 7, P = [], I = [], prof = t => { const a = Math.abs(t); return [0.25 * Math.pow(a, 1.7) - 0.08 * smooth(0.76, 1, a), 0.62 * t]; };
+        const N = 30, SEG = 7, P = [], I = [], prof = (t) => { const a = Math.abs(t); return [0.25 * Math.pow(a, 1.7) - 0.08 * smooth(0.76, 1, a), 0.62 * t]; };
         for (let i = 0; i <= N; i++) {
             const t = i / N * 2 - 1, a = Math.abs(t), [y, z] = prof(t), [y2, z2] = prof(t + 0.01), [y1, z1] = prof(t - 0.01);
             let ty = y2 - y1, tz = z2 - z1;
@@ -4981,7 +4982,7 @@ function updateEnemy(e, dt) {
             burst(e.pos.x - Math.sin(e.yaw) * 0.8, e.pos.y + 0.1, e.pos.z - Math.cos(e.yaw) * 0.8, 0xd8d2b8, 1, 2, 0.3, 2);
     }
     else if (e.type === 'wisp') {
-        e.p.wings.forEach(w => w.rotation.z = w.userData.s * Math.sin(e.anim * 16) * 0.75);
+        e.p.wings.forEach((w) => w.rotation.z = w.userData.s * Math.sin(e.anim * 16) * 0.75);
         e.p.tail.forEach((t, k) => { t.position.x = Math.sin(e.anim * 5 - k * 0.9) * 0.14 * (k + 1); t.position.y = Math.cos(e.anim * 4 - k) * 0.06 * (k + 1); });
         e.p.body.scale.setScalar(1 + tele * 0.3);
     }
@@ -5049,7 +5050,7 @@ function clearHazards() { for (const h of hazards)
 let boss = null, bossFight = false;
 function bossGlow(hex, eyes) { const P = boss.p; P.core.material.color.setHex(hex); P.coreHalo.material.color.setHex(hex); for (const c of P.cracks)
     c.material.color.setHex(hex); if (eyes != null)
-    P.eyes.forEach(m => m.material.color.setHex(eyes)); }
+    P.eyes.forEach((m) => m.material.color.setHex(eyes)); }
 function bossReset() {
     bossFight = false;
     clearHazards();
@@ -5324,7 +5325,7 @@ function updateBoss(e, dt) {
 const D_BOSS_HALF = EDEF.boss.hp / 2;
 /* ============ systems: items, quests, dialogue, NPCs, interactables, puzzles, UI ============ */
 let MODE = 'menu';
-const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 /* ---------- feedback ---------- */
 function notify(text, cls) {
     const box = $('notes'), el = document.createElement('div');
@@ -5433,7 +5434,7 @@ const QUESTS = {
     awaken: { name: 'A Voice in the Stone', kind: 'Main quest', desc: 'You woke beside an old shrine with no memory. Something there is calling to you.', reward: 'A direction',
         obj: () => [['Speak with the spirit at the Shrine of Awakening', false]], target: () => [0, 58.5] },
     road: { name: 'The Road to Oakrest', kind: 'Main quest', desc: 'Ilyra asked you to find Elder Maren in Oakrest, east along the dirt road.', reward: 'Ashwood bow, 15 arrows, 50 XP',
-        obj: s => [['Follow the road east to Oakrest', s.stage >= 1], ['Speak with Elder Maren', false]], target: () => [NPCS.maren.pos.x, NPCS.maren.pos.z] },
+        obj: (s) => [['Follow the road east to Oakrest', s.stage >= 1], ['Speak with Elder Maren', false]], target: () => [NPCS.maren.pos.x, NPCS.maren.pos.z] },
     shards: { name: 'Shards of the Sunstone', kind: 'Main quest', desc: 'Three shards of the Sunstone were scattered across Greenwind Valley: one in the goblin camp south-west of the bridge, one on the high rock north of Oakrest, one on a drowned islet upriver.', reward: 'Temple Key, Ember Bolt, 100 XP',
         obj: () => [['Find the Sunstone Shards (' + shardCount() + '/3)', shardCount() >= 3], ['Return to Elder Maren', false]],
         target: () => { if (shardCount() >= 3)
@@ -5442,11 +5443,11 @@ const QUESTS = {
         obj: () => [['Unseal the temple gate beyond the Old Stonebridge', !!G.flags.g_entry], ['Solve the three trials (' + trialCount() + '/3)', trialCount() >= 3], ['Defeat the Ancient Forest Guardian', !!G.flags.boss], ['Take the Heart of the Forest', !!G.flags.c_boss], ['Return to Ilyra at the Shrine of Awakening', false]],
         target: () => !G.flags.g_entry ? [-75.5, -40] : !G.flags.puz1 ? [-90, -33] : !G.flags.puz2 ? [-106, -46] : !G.flags.puz3 ? [-121, -40] : !G.flags.c_boss ? [-145, -40] : [0, 58.5] },
     goblins: { name: 'Clubs and Anvils', kind: 'Side quest', desc: 'Borin the smith wants the thicket goblins thinned out before they steal another cartload of ore.', reward: 'Oakrest steel edge (+6 sword damage), 40 coins',
-        obj: s => [['Defeat thicket goblins (' + Math.min(4, s.n) + '/4)', s.n >= 4], ['Return to Borin', false]], target: s => s.n >= 4 ? [NPCS.borin.pos.x, NPCS.borin.pos.z] : [-85, 70] },
+        obj: (s) => [['Defeat thicket goblins (' + Math.min(4, s.n) + '/4)', s.n >= 4], ['Return to Borin', false]], target: (s) => s.n >= 4 ? [NPCS.borin.pos.x, NPCS.borin.pos.z] : [-85, 70] },
     herbs: { name: 'Silver for a Fever', kind: 'Side quest', desc: 'Tessa’s stock of silverleaf is gone. The pale herb grows near old stones and in the western woods.', reward: '3 Healing Draughts, 30 coins',
         obj: () => [['Gather silverleaf (' + Math.min(4, G.inv.herb || 0) + '/4)', has('herb', 4)], ['Bring it to Tessa', false]], target: () => has('herb', 4) ? [NPCS.tessa.pos.x, NPCS.tessa.pos.z] : [-95, 20] },
 };
-const qState = id => (G.q[id] ? G.q[id].s : null);
+const qState = (id) => (G.q[id] ? G.q[id].s : null);
 function qStart(id) { if (G.q[id])
     return; G.q[id] = { s: 'active', n: 0, stage: 0 }; notify('New quest: ' + QUESTS[id].name, 'quest'); sfx('questStart'); autosave(); }
 function qDone(id) { if (!G.q[id] || G.q[id].s === 'done')
@@ -5471,22 +5472,22 @@ function currentObjective() {
     const id = trackedQuest();
     if (!id)
         return null;
-    const list = QUESTS[id].obj(G.q[id]), cur = list.find(o => !o[1]) || list[list.length - 1];
+    const list = QUESTS[id].obj(G.q[id]), cur = list.find((o) => !o[1]) || list[list.length - 1];
     return { id, name: QUESTS[id].name, text: cur[0], target: QUESTS[id].target(G.q[id]) };
 }
 /* ---------- dialogue ---------- */
 let dlg = null;
 function talk(who, pages, done) { dlg = { who, pages, i: 0, done }; setMode('dialog'); renderDlg(); }
+const pageOpts = (pg) => typeof pg === 'string' ? undefined : pg.opts;
 function pickOpt(k) { if (!dlg)
-    return; const pg = dlg.pages[dlg.i]; if (!pg.opts || !pg.opts[k])
-    return; const cur = dlg, fn = pg.opts[k][1]; sfx('ui'); if (fn)
+    return; const opts = pageOpts(dlg.pages[dlg.i]); if (!opts || !opts[k])
+    return; const cur = dlg, fn = opts[k][1]; sfx('ui'); if (fn)
     fn(); if (dlg === cur)
     advanceDlg(true); }
 function advanceDlg(force) {
     if (!dlg)
         return;
-    const pg = dlg.pages[dlg.i];
-    if (pg.opts && !force)
+    if (pageOpts(dlg.pages[dlg.i]) && !force)
         return;
     dlg.i++;
     sfx('ui');
@@ -5705,7 +5706,7 @@ addInteract({ x: -76.4, z: -40, r: 3.2, label: () => G.flags.g_entry ? null : (h
         autosave();
     } });
 addInteract({ x: -80.9, z: -28, r: 2.4, label: () => G.flags.puz1 ? null : 'Touch the rune (returns the stone block)', act: () => { setBlock(temple.blockHome[0], temple.blockHome[1]); sfx('gate'); } });
-temple.pillars.forEach(pl => addInteract({ x: pl.x, z: pl.z, r: 2.6, label: () => G.flags.puz2 ? null : 'Turn the pillar (' + SYMBOLS[pilState(pl.i)] + ')', act: () => {
+temple.pillars.forEach((pl) => addInteract({ x: pl.x, z: pl.z, r: 2.6, label: () => G.flags.puz2 ? null : 'Turn the pillar (' + SYMBOLS[pilState(pl.i)] + ')', act: () => {
         G.flags['pil' + pl.i] = (pilState(pl.i) + 1) % 4;
         sfx('stone');
         pl.spin = 1;
@@ -5722,7 +5723,7 @@ function puzzle3Check() {
     if (temple.eye.lit)
         G.flags.eye = true;
     sfx('fire');
-    if (temple.braziers.every(b => b.lit) && temple.eye.lit)
+    if (temple.braziers.every((b) => b.lit) && temple.eye.lit)
         solvePuzzle('puz3', 'Flame and arrow');
 }
 function updateTemple(dt, instant) {
@@ -5961,7 +5962,7 @@ npc('halric', 'Halric', { skin: 0xc98f6a, top: 0x6a7480, bottom: 0x2a3a50, hair:
             ] }]);
 });
 {
-    const pip = npc('pip', 'Pip', { skin: 0xe0b08a, top: 0xe8c36a, bottom: 0x5a7a4a, hair: 0x8a4a20, hat: 'cap', hatC: 0xc8452f, headScale: 1.2, s: 0.66 }, 80, 16, [[82, 17], [81, 23.5], [75, 23], [74.5, 16.5]], n => {
+    const pip = npc('pip', 'Pip', { skin: 0xe0b08a, top: 0xe8c36a, bottom: 0x5a7a4a, hair: 0x8a4a20, hat: 'cap', hatC: 0xc8452f, headScale: 1.2, s: 0.66 }, 80, 16, [[82, 17], [81, 23.5], [75, 23], [74.5, 16.5]], (n) => {
         const lines = ['I saw something shiny under the old bridge! But I can’t swim yet.', 'There’s a cave behind the big waterfall up north. Halric says I made it up. I didn’t.', 'Someone left a chest behind our house. I’m not allowed to open it.', 'The stranger by the bridge draws maps of places that aren’t there anymore.'];
         n.li = ((n.li || 0) + 1) % lines.length;
         talk('Pip', [lines[n.li]]);
@@ -6218,7 +6219,7 @@ const IC = {
     ember: ['#f0703a', '<path d="M12 2c1 5 6.5 6 6.5 12a6.5 6.5 0 0 1-13 0c0-3 2-4 2-7 2 1 3.5 2 4.5-5z"/><path d="M12 12c1 2 3 3 3 5a3 3 0 0 1-6 0c0-2 2-2 3-5z" fill="#ffe08a"/>'],
     tunic: ['#b9b29a', '<path d="M6 3l6 2 6-2 3.5 5-3.5 2v11H6V10L2.5 8z"/>'],
 };
-const icon = id => { const i = IC[id] || IC.stone; return `<span class="ic"><svg viewBox="0 0 24 24" fill="${i[0]}" aria-hidden="true">${i[1]}</svg></span>`; };
+const icon = (id) => { const i = IC[id] || IC.stone; return `<span class="ic"><svg viewBox="0 0 24 24" fill="${i[0]}" aria-hidden="true">${i[1]}</svg></span>`; };
 const SIGIL = '<svg class="sigil" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true"><path d="M32 6a26 26 0 1 0 26 26" stroke-width="3"/><path d="M47 22a16.5 16.5 0 1 0 1.5 13" stroke-width="3"/><circle cx="32" cy="32" r="6.5" stroke-width="3"/><path d="M32 0v4M32 60v4M0 32h4M60 32h4" stroke-width="2"/></svg>';
 /* dialogue with a typewriter reveal; E always advances */
 let dlgType = null;
@@ -6229,9 +6230,10 @@ function renderDlg() {
     dlgType = { full: text, n: 0 };
     const o = $('dlgOpts');
     o.innerHTML = '';
-    if (pg.opts)
-        pg.opts.forEach((op, k) => { const b = document.createElement('button'); b.innerHTML = '<kbd>' + (k + 1) + '</kbd> '; b.appendChild(document.createTextNode(op[0])); b.onclick = ev => { ev.stopPropagation(); pickOpt(k); }; o.appendChild(b); });
-    $('dlgHint').style.display = pg.opts ? 'none' : 'block';
+    const opts = pageOpts(pg);
+    if (opts)
+        opts.forEach((op, k) => { const b = document.createElement('button'); b.innerHTML = '<kbd>' + (k + 1) + '</kbd> '; b.appendChild(document.createTextNode(op[0])); b.onclick = ev => { ev.stopPropagation(); pickOpt(k); }; o.appendChild(b); });
+    $('dlgHint').style.display = opts ? 'none' : 'block';
     $('dialog').classList.toggle('carved', dlg.who === 'Inscription' || dlg.who === 'Wall carving');
 }
 function updateDlgType(dt) { if (!dlgType || MODE !== 'dialog')
@@ -6262,7 +6264,7 @@ function renderPanel() {
         let items = '';
         for (const c of order)
             if (cats[c])
-                items += `<h4>${c}</h4>` + cats[c].map(id => row(id, esc(ITEMS[id].n), '×' + G.inv[id], esc(ITEMS[id].d || ''), ITEMS[id].use ? `<button data-act="use:${id}">Use</button>` : '')).join('');
+                items += `<h4>${c}</h4>` + cats[c].map((id) => row(id, esc(ITEMS[id].n), '×' + G.inv[id], esc(ITEMS[id].d || ''), ITEMS[id].use ? `<button data-act="use:${id}">Use</button>` : '')).join('');
         const rec = RECIPES.map((r, i) => { const ok = Object.keys(r.need).every(k => has(k, r.need[k])); return row(r.out, esc(r.label), '', Object.keys(r.need).map(k => `<span class="chip${has(k, r.need[k]) ? '' : ' no'}">${r.need[k]} ${esc(ITEMS[k].n)} <i>(${G.inv[k] || 0})</i></span>`).join(' '), `<button data-act="craft:${i}" ${ok ? '' : 'disabled'}>Craft</button>`); }).join('');
         const swordName = ['Warden’s Blade', 'Oakrest Steel Blade', 'Echo-folded Blade', 'Sunstone Edge'][Math.min(3, S.swordLv)];
         body.innerHTML = `<div class="cols"><section class="card"><div class="plate">${SIGIL}<div><h3>The Warden</h3><p>Level ${S.level}, ${S.xp} of ${xpNeed(S.level)} experience</p></div></div>
@@ -6282,10 +6284,10 @@ function renderPanel() {
             for (const id of ids)
                 if (G.q[id].s === st) {
                     const q = QUESTS[id];
-                    h += `<div class="quest ${st} ${q.kind === 'Main quest' ? 'main' : 'side'}"><h4>${esc(q.name)} <span class="qty">${q.kind}${st === 'done' ? ', complete' : ''}</span></h4><p>${esc(q.desc)}</p>` + (st === 'active' ? '<ul>' + q.obj(G.q[id]).map(o => `<li class="${o[1] ? 'ok' : ''}">${esc(o[0])}</li>`).join('') + '</ul>' : '') + `<p class="reward">Reward: ${esc(q.reward)}</p></div>`;
+                    h += `<div class="quest ${st} ${q.kind === 'Main quest' ? 'main' : 'side'}"><h4>${esc(q.name)} <span class="qty">${q.kind}${st === 'done' ? ', complete' : ''}</span></h4><p>${esc(q.desc)}</p>` + (st === 'active' ? '<ul>' + q.obj(G.q[id]).map((o) => `<li class="${o[1] ? 'ok' : ''}">${esc(o[0])}</li>`).join('') + '</ul>' : '') + `<p class="reward">Reward: ${esc(q.reward)}</p></div>`;
                 }
         const lore = ['t_shrine', 't_ruin', 't_mesa', 't_fall'].filter(t => G.flags[t]).length, seen = LOCS.filter(l => G.flags['seen_' + l.id]).length;
-        const tally = (label, v, max) => `<div class="tally"><span>${label}</span><b>${v}${max ? ' / ' + max : ''}</b>${max ? `<div><i style="width:${v / max * 100}%"></i></div>` : ''}</div>`;
+        const tally = (label, v, max) => `<div class="tally"><span>${label}</span><b>${v}${max ? ' / ' + max : ''}</b>${max ? `<div><i style="width:${+v / max * 100}%"></i></div>` : ''}</div>`;
         body.innerHTML = `<div class="cols two"><section><h3>Quests</h3>${h || '<p class="empty">No quests yet. Speak with the spirit at the shrine.</p>'}</section>
       <section class="card"><h3>Discoveries</h3>${tally('Locations', seen, LOCS.length)}${tally('Eldorian relics', G.inv.relic || 0, 5)}${tally('Inscriptions read', lore, 4)}${tally('Foes defeated', G.kills)}${tally('Time played', Math.floor(G.playTime / 60) + ' min')}</section></div>`;
     }
@@ -7070,7 +7072,7 @@ canvas.addEventListener('wheel', ev => { if (MODE === 'play')
 /* ---------- ambient life: birds and butterflies ---------- */
 const birds = [], flies = [];
 {
-    const wing = s => { const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute([0, 0, 0.25, s * 1.1, 0, 0, 0, 0, -0.25], 3)); g.computeVertexNormals(); return g; }, WL = wing(1), WR = wing(-1), bm = new T.MeshBasicMaterial({ color: 0x2a3038, side: T.DoubleSide });
+    const wing = (s) => { const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute([0, 0, 0.25, s * 1.1, 0, 0, 0, 0, -0.25], 3)); g.computeVertexNormals(); return g; }, WL = wing(1), WR = wing(-1), bm = new T.MeshBasicMaterial({ color: 0x2a3038, side: T.DoubleSide });
     for (let f = 0; f < 3; f++) {
         const c = [[30, 30, 60, 46], [-90, 40, 80, 58], [70, -60, 70, 52]][f];
         for (let i = 0; i < 5; i++) {

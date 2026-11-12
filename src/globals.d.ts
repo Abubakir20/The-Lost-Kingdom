@@ -62,5 +62,40 @@ interface Npc {
 interface Chest { id: string; g: THREE.Group; lid: THREE.Group; x: number; z: number; items: any; coins: number; col: CircleCollider; hl: any; /** lid animation progress, 0..1 */ open?: number }
 interface HouseOptions { h?: number; plaster?: number; shut?: number; two?: boolean; smoke?: boolean; doorX?: number; sign?: number }
 interface PaintOptions { side?: string; sideScale?: number; mode?: string }
+/** One instanced copy placed by chunked(): position, rotation, scale and an optional tint. */
+interface ChunkItem { x: number; y: number; z: number; rx?: number; ry?: number; rz?: number; sx?: number; sy?: number; sz?: number; s?: number; c?: number[] }
 interface ChunkOptions { cy?: number; extent?: number; dist?: number; grass?: boolean; shadow?: boolean; receive?: boolean }
 interface PaintedTexture extends THREE.Texture { triGain: THREE.Vector3 }
+
+/** A scripted camera move; while one runs, input is suspended. */
+interface Cine { t: number; dur: number; camFn: (k: number, t?: number) => void; onEnd?: () => void }
+interface EnemyDef {
+  name: string; hp: number; dmg: number; speed: number; radius: number; height: number; xp: number; coins?: number[];
+  boss?: boolean; passive?: boolean; fly?: boolean; scale?: number; loot?: any; [stat: string]: any;
+}
+/** A living creature. The fields every kind shares are listed; AI timers and per-kind state ride along on the index signature. */
+interface Enemy {
+  type: string; def: EnemyDef; g: THREE.Group; p: Rig & CreatureRig; pos: THREE.Vector3; home: { x: number; z: number };
+  yaw: number; hp: number; state: string; t: number; alive: boolean; aggro: boolean; deadT: number; kb: THREE.Vector3;
+  [extra: string]: any;
+}
+interface HitOptions { crit?: boolean; kx?: number; kz?: number; kb?: number; fire?: boolean }
+interface Projectile { live: boolean; m: THREE.Object3D; pos: THREE.Vector3; type: string; [extra: string]: any }
+interface Flyer { g: THREE.Group; l: THREE.Mesh; r: THREE.Mesh; [extra: string]: any }
+/** One page of a conversation: plain text, or text with answers (label, then what choosing it does). */
+type DialogOption = [label: string, choose?: (() => void) | null];
+type DialogPage = string | { t: string; opts?: DialogOption[] };
+interface Dialog { pages: DialogPage[]; i: number; who: string; done?: () => void }
+/** Something the player can walk up to and use. */
+interface Interactable { x?: number; z?: number; r: number; label: () => string; _l?: string; [extra: string]: any }
+interface Objective { id?: string; name?: string; text?: string; target: any }
+
+type Side = 'L' | 'R';
+interface ItemDef { n: string; c: string; d: string; use?: number; [extra: string]: any }
+interface Recipe { out: string; n: number; need: Record<string, number>; label: string }
+interface QuestDef { name: string; kind: string; desc: string; reward: string; obj: (state?: any) => any[][]; target: (state?: any) => any }
+interface QualitySet { grass: number; shadow: number; pr: number; fog: number; veg: number; post: boolean }
+/** One carried piece of gear and its two homes: the hand and the back. */
+interface CarryItem { obj: THREE.Group; hand: THREE.Object3D; hp: THREE.Vector3; hq: THREE.Quaternion; hs: number; bp: THREE.Vector3; bq: THREE.Quaternion; bs: number; held: boolean }
+/** The player's moment-to-moment state (not saved). */
+interface AttackState { t: number; dur: number; hitAt: number; hit: boolean; heavy: boolean; combo: number }

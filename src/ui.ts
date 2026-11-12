@@ -1,5 +1,5 @@
 /* ============ interface: icons, dialogue, pack, journal, map, HUD ============ */
-const IC = {
+const IC: Record<string, string[]> = {
   potion: ['#d9503a', '<path d="M9 2h6v2l-1 1v4l4.5 7.5A3 3 0 0 1 15.9 21H8.1a3 3 0 0 1-2.6-4.5L10 9V5L9 4z"/><path d="M7.6 15h8.8l1.2 2.2c.5.9-.1 1.8-1.1 1.8H7.5c-1 0-1.6-.9-1.1-1.8z" fill="#fff" opacity=".4"/>'],
   berry: ['#e8962a', '<circle cx="8" cy="15" r="4.2"/><circle cx="16" cy="15.5" r="4"/><circle cx="12" cy="8.5" r="4.2"/><path d="M12 4c1-2 3-3 5-2-1 2-3 3-5 2z" fill="#5f8f3e"/>'],
   roast: ['#a8643a', '<path d="M4 12a6.5 5.5 0 1 1 10 4.6C10.5 19 5 17.5 4 12z"/><path d="M14.5 15.500l5 5" stroke="#f2ead8" stroke-width="2.6" stroke-linecap="round"/><circle cx="20" cy="21" r="1.8" fill="#f2ead8"/>'],
@@ -21,31 +21,32 @@ const IC = {
   ember: ['#f0703a', '<path d="M12 2c1 5 6.5 6 6.5 12a6.5 6.5 0 0 1-13 0c0-3 2-4 2-7 2 1 3.5 2 4.5-5z"/><path d="M12 12c1 2 3 3 3 5a3 3 0 0 1-6 0c0-2 2-2 3-5z" fill="#ffe08a"/>'],
   tunic: ['#b9b29a', '<path d="M6 3l6 2 6-2 3.5 5-3.5 2v11H6V10L2.5 8z"/>'],
 };
-const icon = id => { const i = IC[id] || IC.stone; return `<span class="ic"><svg viewBox="0 0 24 24" fill="${i[0]}" aria-hidden="true">${i[1]}</svg></span>`; };
+const icon = (id: string) => { const i = IC[id] || IC.stone; return `<span class="ic"><svg viewBox="0 0 24 24" fill="${i[0]}" aria-hidden="true">${i[1]}</svg></span>`; };
 const SIGIL = '<svg class="sigil" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true"><path d="M32 6a26 26 0 1 0 26 26" stroke-width="3"/><path d="M47 22a16.5 16.5 0 1 0 1.5 13" stroke-width="3"/><circle cx="32" cy="32" r="6.5" stroke-width="3"/><path d="M32 0v4M32 60v4M0 32h4M60 32h4" stroke-width="2"/></svg>';
 
 /* dialogue with a typewriter reveal; E always advances */
-let dlgType = null;
+let dlgType: { n: number; full: string } | null = null;
 function renderDlg() {
   const pg = dlg.pages[dlg.i], text = typeof pg === 'string' ? pg : pg.t;
   $('dlgWho').textContent = dlg.who; $('dlgText').textContent = ''; dlgType = { full: text, n: 0 };
   const o = $('dlgOpts'); o.innerHTML = '';
-  if (pg.opts) pg.opts.forEach((op, k) => { const b = document.createElement('button'); b.innerHTML = '<kbd>' + (k + 1) + '</kbd> '; b.appendChild(document.createTextNode(op[0])); b.onclick = ev => { ev.stopPropagation(); pickOpt(k); }; o.appendChild(b); });
-  $('dlgHint').style.display = pg.opts ? 'none' : 'block';
+  const opts = pageOpts(pg);
+  if (opts) opts.forEach((op, k) => { const b = document.createElement('button'); b.innerHTML = '<kbd>' + (k + 1) + '</kbd> '; b.appendChild(document.createTextNode(op[0])); b.onclick = ev => { ev.stopPropagation(); pickOpt(k); }; o.appendChild(b); });
+  $('dlgHint').style.display = opts ? 'none' : 'block';
   $('dialog').classList.toggle('carved', dlg.who === 'Inscription' || dlg.who === 'Wall carving');
 }
-function updateDlgType(dt) { if (!dlgType || MODE !== 'dialog') return; if (dlgType.n < dlgType.full.length) { const was = dlgType.n | 0; dlgType.n = Math.min(dlgType.full.length, dlgType.n + dt * 70); if ((dlgType.n | 0) !== was) { $('dlgText').textContent = dlgType.full.slice(0, dlgType.n | 0); if (((dlgType.n | 0) % 3) === 0) sfx('type'); } } }
+function updateDlgType(dt: number) { if (!dlgType || MODE !== 'dialog') return; if (dlgType.n < dlgType.full.length) { const was = dlgType.n | 0; dlgType.n = Math.min(dlgType.full.length, dlgType.n + dt * 70); if ((dlgType.n | 0) !== was) { $('dlgText').textContent = dlgType.full.slice(0, dlgType.n | 0); if (((dlgType.n | 0) % 3) === 0) sfx('type'); } } }
 
 function renderPanel() {
   const tabs = shopOpen ? [['shop', 'Tessa’s stall']] : [['inventory', 'Pack'], ['journal', 'Journal'], ['map', 'Map']];
   $('panelTabs').innerHTML = tabs.map(t => `<button class="tab${t[0] === panelTab ? ' on' : ''}" data-act="tab:${t[0]}">${t[1]}</button>`).join('') + '<span class="purse2">' + icon('relic') + '<b>' + G.p.coins + '</b> coins</span><button class="tab close" data-act="close" aria-label="Close">Close</button>';
   const body = $('panelBody'), S = G.p; body.className = 'tab-' + panelTab;
-  const row = (ic, title, qty, desc, btn?, cls?) => `<div class="item${cls ? ' ' + cls : ''}">${icon(ic)}<div class="tx"><b>${title}</b>${qty ? ` <span class="qty">${qty}</span>` : ''}${desc ? `<p>${desc}</p>` : ''}</div>${btn || ''}</div>`;
-  const meter = (label, v, max, cls) => `<div class="meter ${cls}"><span>${label}</span><div><i style="width:${clamp(v / max * 100, 0, 100)}%"></i></div><em>${Math.ceil(v)} / ${max}</em></div>`;
+  const row = (ic: string, title: string, qty: string, desc: string, btn?: string, cls?: string) => `<div class="item${cls ? ' ' + cls : ''}">${icon(ic)}<div class="tx"><b>${title}</b>${qty ? ` <span class="qty">${qty}</span>` : ''}${desc ? `<p>${desc}</p>` : ''}</div>${btn || ''}</div>`;
+  const meter = (label: string, v: number, max: number, cls: string) => `<div class="meter ${cls}"><span>${label}</span><div><i style="width:${clamp(v / max * 100, 0, 100)}%"></i></div><em>${Math.ceil(v)} / ${max}</em></div>`;
   if (panelTab === 'inventory') {
-    const cats = {}; for (const id in G.inv) { if (!G.inv[id] || !ITEMS[id]) continue; (cats[ITEMS[id].c] = cats[ITEMS[id].c] || []).push(id); }
+    const cats: Record<string, string[]> = {}; for (const id in G.inv) { if (!G.inv[id] || !ITEMS[id]) continue; (cats[ITEMS[id].c] = cats[ITEMS[id].c] || []).push(id); }
     const order = ['Weapons', 'Potions', 'Food', 'Materials', 'Quest items', 'Artifacts', 'Collectibles'];
-    let items = ''; for (const c of order) if (cats[c]) items += `<h4>${c}</h4>` + cats[c].map(id => row(id, esc(ITEMS[id].n), '×' + G.inv[id], esc(ITEMS[id].d || ''), ITEMS[id].use ? `<button data-act="use:${id}">Use</button>` : '')).join('');
+    let items = ''; for (const c of order) if (cats[c]) items += `<h4>${c}</h4>` + cats[c].map((id: string) => row(id, esc(ITEMS[id].n), '×' + G.inv[id], esc(ITEMS[id].d || ''), ITEMS[id].use ? `<button data-act="use:${id}">Use</button>` : '')).join('');
     const rec = RECIPES.map((r, i) => { const ok = Object.keys(r.need).every(k => has(k, r.need[k])); return row(r.out, esc(r.label), '', Object.keys(r.need).map(k => `<span class="chip${has(k, r.need[k]) ? '' : ' no'}">${r.need[k]} ${esc(ITEMS[k].n)} <i>(${G.inv[k] || 0})</i></span>`).join(' '), `<button data-act="craft:${i}" ${ok ? '' : 'disabled'}>Craft</button>`); }).join('');
     const swordName = ['Warden’s Blade', 'Oakrest Steel Blade', 'Echo-folded Blade', 'Sunstone Edge'][Math.min(3, S.swordLv)];
     body.innerHTML = `<div class="cols"><section class="card"><div class="plate">${SIGIL}<div><h3>The Warden</h3><p>Level ${S.level}, ${S.xp} of ${xpNeed(S.level)} experience</p></div></div>
@@ -61,10 +62,10 @@ function renderPanel() {
     let h = ''; const ids = Object.keys(QUESTS).filter(id => G.q[id]);
     for (const st of ['active', 'done']) for (const id of ids) if (G.q[id].s === st) {
       const q = QUESTS[id];
-      h += `<div class="quest ${st} ${q.kind === 'Main quest' ? 'main' : 'side'}"><h4>${esc(q.name)} <span class="qty">${q.kind}${st === 'done' ? ', complete' : ''}</span></h4><p>${esc(q.desc)}</p>` + (st === 'active' ? '<ul>' + q.obj(G.q[id]).map(o => `<li class="${o[1] ? 'ok' : ''}">${esc(o[0])}</li>`).join('') + '</ul>' : '') + `<p class="reward">Reward: ${esc(q.reward)}</p></div>`;
+      h += `<div class="quest ${st} ${q.kind === 'Main quest' ? 'main' : 'side'}"><h4>${esc(q.name)} <span class="qty">${q.kind}${st === 'done' ? ', complete' : ''}</span></h4><p>${esc(q.desc)}</p>` + (st === 'active' ? '<ul>' + q.obj(G.q[id]).map((o: any[]) => `<li class="${o[1] ? 'ok' : ''}">${esc(o[0])}</li>`).join('') + '</ul>' : '') + `<p class="reward">Reward: ${esc(q.reward)}</p></div>`;
     }
     const lore = ['t_shrine', 't_ruin', 't_mesa', 't_fall'].filter(t => G.flags[t]).length, seen = LOCS.filter(l => G.flags['seen_' + l.id]).length;
-    const tally = (label, v, max?) => `<div class="tally"><span>${label}</span><b>${v}${max ? ' / ' + max : ''}</b>${max ? `<div><i style="width:${v / max * 100}%"></i></div>` : ''}</div>`;
+    const tally = (label: string, v: number | string, max?: number) => `<div class="tally"><span>${label}</span><b>${v}${max ? ' / ' + max : ''}</b>${max ? `<div><i style="width:${+v / max * 100}%"></i></div>` : ''}</div>`;
     body.innerHTML = `<div class="cols two"><section><h3>Quests</h3>${h || '<p class="empty">No quests yet. Speak with the spirit at the shrine.</p>'}</section>
       <section class="card"><h3>Discoveries</h3>${tally('Locations', seen, LOCS.length)}${tally('Eldorian relics', G.inv.relic || 0, 5)}${tally('Inscriptions read', lore, 4)}${tally('Foes defeated', G.kills)}${tally('Time played', Math.floor(G.playTime / 60) + ' min')}</section></div>`;
   } else if (panelTab === 'map') {
@@ -76,7 +77,7 @@ function renderPanel() {
     body.innerHTML = `<div class="cols two"><section><h3>Buy <span class="qty">You have ${S.coins} coins</span></h3>${buy}</section><section><h3>Sell</h3>${sell || '<p class="empty">Nothing Tessa wants. She buys fangs, cores, crystals and raw meat.</p>'}</section></div>`;
   }
 }
-const w2m = (v, N) => (v + WORLD) / (WORLD * 2) * N;
+const w2m = (v: number, N: number) => (v + WORLD) / (WORLD * 2) * N;
 function drawBigMap() {
   const c = $<HTMLCanvasElement>('bigmap'); if (!c) return; const x = c.getContext('2d'), N = c.width;
   x.imageSmoothingEnabled = true; x.drawImage(mapCanvas, 0, 0, N, N);
@@ -98,7 +99,7 @@ function drawBigMap() {
 /* ---------- HUD ---------- */
 const mini = $<HTMLCanvasElement>('minimap').getContext('2d', { willReadFrequently: true });
 let hudT = 0, miniT = 0, pipN = 0;
-function updateHUD(dt) {
+function updateHUD(dt: number) {
   const S = G.p;
   if (bannerT > 0) { bannerT -= dt; if (bannerT <= 0) $('banner').classList.remove('show'); }
   updateDlgType(dt); updateEnemyBars();
@@ -121,12 +122,12 @@ function updateHUD(dt) {
   const hh = Math.floor(G.time * 24), mm = Math.floor((G.time * 24 - hh) * 6) * 10; $('region').textContent = regionName(); $('clock').textContent = (hh < 10 ? '0' : '') + hh + ':' + (mm < 10 ? '0' : '') + mm + (weather.raining ? ', rain' : ''); $('dayIcon').className = nightAmt > 0.5 ? 'moon' : 'sun';
   miniT -= 1; if (miniT <= 0) { miniT = 2; drawMini(o); }
 }
-function drawMini(o) {
+function drawMini(o: Objective) {
   const N = 150, span = 150, sc = MAPN / (WORLD * 2), x = mini;
   x.save(); x.clearRect(0, 0, N, N); x.beginPath(); x.arc(N / 2, N / 2, N / 2, 0, 6.3); x.clip();
   x.fillStyle = '#7fb0b6'; x.fillRect(0, 0, N, N);
   x.drawImage(mapCanvas, (PL.pos.x + WORLD - span / 2) * sc, (PL.pos.z + WORLD - span / 2) * sc, span * sc, span * sc, 0, 0, N, N);
-  const P = (wx, wz) => [N / 2 + (wx - PL.pos.x) / span * N, N / 2 + (wz - PL.pos.z) / span * N];
+  const P = (wx: number, wz: number) => [N / 2 + (wx - PL.pos.x) / span * N, N / 2 + (wz - PL.pos.z) / span * N];
   for (const L of LOCS) if (G.disc[L.id]) { const [a, b] = P(L.x, L.z); x.fillStyle = L.way ? '#1f8f86' : '#5a3d28'; x.strokeStyle = '#f6ead0'; x.lineWidth = 1.2; x.beginPath(); x.arc(a, b, 3.4, 0, 6.3); x.fill(); x.stroke(); }
   for (const id in NPCS) { const [a, b] = P(NPCS[id].pos.x, NPCS[id].pos.z); x.fillStyle = '#2f7a3a'; x.fillRect(a - 1.8, b - 1.8, 3.6, 3.6); }
   for (const e of enemies) if (e.alive && (e.state === 'chase' || e.state === 'windup' || e.def.boss && bossFight)) { const [a, b] = P(e.pos.x, e.pos.z); x.fillStyle = '#d9402c'; x.beginPath(); x.arc(a, b, 2.8, 0, 6.3); x.fill(); }

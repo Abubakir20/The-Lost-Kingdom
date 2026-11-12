@@ -23,13 +23,13 @@ function humanoid(o: HumanoidLook): Humanoid {
   else if (o.hat === 'helm') { mesh(new T.SphereGeometry(0.3, 12, 8, 0, 6.3, 0, 1.75), lam(0x8a929a), 0, 0.03, 0, p.head); mesh(bx(0.05, 0.3, 0.06), lam(0x8a929a), 0, -0.02, 0.28, p.head); mesh(new T.ConeGeometry(0.05, 0.22, 6), lam(0xc8452f), 0, 0.42, 0, p.head); }
   else if (o.hat === 'hood') { mesh(new T.SphereGeometry(0.33, 12, 9, 0, 6.3, 0, 2.2), lam(o.top), 0, 0.03, -0.04, p.head); mesh(new T.ConeGeometry(0.16, 0.36, 8), lam(o.top), 0, 0.22, -0.26, p.head).rotation.x = -1.9; }
   else if (o.hat === 'cap') { mesh(new T.SphereGeometry(0.29, 10, 6, 0, 6.3, 0, 1.3), lam(o.hatC || 0x5a7a4a), 0, 0.06, 0, p.head); mesh(bx(0.3, 0.03, 0.2), lam(o.hatC || 0x5a7a4a), 0, 0.1, 0.3, p.head); }
-  for (const [k, s] of [['R', -1], ['L', 1]] as [string, number][]) {
-    const a = p['arm' + k] = grpIn(p.chest, s * 0.325, 0.47, 0);
+  for (const [k, s] of [['R', -1], ['L', 1]] as [Side, number][]) {
+    const a = p[`arm${k}` as const] = grpIn(p.chest, s * 0.325, 0.47, 0);
     mesh(HG.sho, sleeve, 0, 0, 0, a); mesh(HG.uarm, sleeve, 0, -0.16, 0, a);
-    const e = p['elbow' + k] = grpIn(a, 0, -0.32, 0); mesh(HG.farm, o.bare ? skin : sleeve, 0, -0.15, 0, e);
-    const h = p['hand' + k] = grpIn(e, 0, -0.33, 0); mesh(HG.hand, skin, 0, 0, 0, h);
-    const l = p['leg' + k] = grpIn(p.hips, s * 0.14, 0.85, 0); mesh(HG.thigh, bot, 0, -0.21, 0, l);
-    const kn = p['knee' + k] = grpIn(l, 0, -0.43, 0); mesh(HG.knee, bot, 0, 0, 0, kn); mesh(HG.shin, o.robe != null ? bot : boot, 0, -0.2, 0, kn); mesh(HG.boot, boot, 0, -0.39, 0.06, kn);
+    const e = p[`elbow${k}` as const] = grpIn(a, 0, -0.32, 0); mesh(HG.farm, o.bare ? skin : sleeve, 0, -0.15, 0, e);
+    const h = p[`hand${k}` as const] = grpIn(e, 0, -0.33, 0); mesh(HG.hand, skin, 0, 0, 0, h);
+    const l = p[`leg${k}` as const] = grpIn(p.hips, s * 0.14, 0.85, 0); mesh(HG.thigh, bot, 0, -0.21, 0, l);
+    const kn = p[`knee${k}` as const] = grpIn(l, 0, -0.43, 0); mesh(HG.knee, bot, 0, 0, 0, kn); mesh(HG.shin, o.robe != null ? bot : boot, 0, -0.2, 0, kn); mesh(HG.boot, boot, 0, -0.39, 0.06, kn);
   }
   if (o.robe != null) mesh(HG.robe, lam(o.robe, { side: T.DoubleSide }), 0, 0.5, 0, p.hips);
   if (o.skirt != null) mesh(HG.skirt, lam(o.skirt, { side: T.DoubleSide }), 0, 0.78, 0, p.hips);
@@ -71,11 +71,11 @@ function animHumanoid(p: Rig, mode: string, t: number, dt: number, vy?: number) 
   p.hips.position.y = -0.9 + A.bob; p.pivot.rotation.x = A.lean; p.chest.rotation.set(0, A.tw, 0); p.hips.rotation.y = -A.tw * 0.4; p.head.rotation.set(A.hx, A.hy - A.tw * 0.5, 0);
 }
 /* ink outline (inverted hull), the main thing that makes characters read as drawn rather than as blocks */
-const OUTLINE = {};
-function outlineMat(th) { if (!OUTLINE[th]) { const m = new T.MeshBasicMaterial({ color: 0x33263a, side: T.BackSide }); m.onBeforeCompile = sh => { sh.vertexShader = sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed += normalize(normal) * ' + th.toFixed(4) + ';'); }; m.customProgramCacheKey = () => 'ol' + th; OUTLINE[th] = m; } return OUTLINE[th]; }
-function addOutline(g, th = 0.014) { const list = []; g.traverse(o => { if (o.isMesh && o.castShadow && o.material.isMeshToonMaterial && o.geometry.attributes.normal) list.push(o); }); for (const o of list) { const m = new T.Mesh(o.geometry, outlineMat(th)); m.userData.outline = 1; o.add(m); } }
+const OUTLINE: Record<string, THREE.MeshBasicMaterial> = {};
+function outlineMat(th: number) { if (!OUTLINE[th]) { const m = new T.MeshBasicMaterial({ color: 0x33263a, side: T.BackSide }); m.onBeforeCompile = sh => { sh.vertexShader = sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed += normalize(normal) * ' + th.toFixed(4) + ';'); }; m.customProgramCacheKey = () => 'ol' + th; OUTLINE[th] = m; } return OUTLINE[th]; }
+function addOutline(g: THREE.Group, th = 0.014) { const list: any[] = []; g.traverse((o: any) => { if (o.isMesh && o.castShadow && o.material.isMeshToonMaterial && o.geometry.attributes.normal) list.push(o); }); for (const o of list) { const m = new T.Mesh(o.geometry, outlineMat(th)); m.userData.outline = 1; o.add(m); } }
 /* give a character its own materials so it can flash when struck */
-function ownMaterials(g) { const map = new Map(), list = []; g.traverse(o => { if (!o.isMesh || !o.material.emissive) return; let m = map.get(o.material); if (!m) { m = o.material.clone(); map.set(o.material, m); list.push(m); } o.material = m; }); return list; }
+function ownMaterials(g: THREE.Group) { const map = new Map(), list: any[] = []; g.traverse((o: any) => { if (!o.isMesh || !o.material.emissive) return; let m = map.get(o.material); if (!m) { m = o.material.clone(); map.set(o.material, m); list.push(m); } o.material = m; }); return list; }
 
 /* ---------- the Warden (player) ---------- */
 const hero = humanoid({ skin: 0xd09a72, top: 0xf2ead8, bottom: 0x2f5d62, boot: 0x4a3526, belt: 0x8a5a30 }) as Hero;
@@ -93,7 +93,7 @@ scene.add(hero.g);
   hero.tails = [-1, 1].map(s => { const t = grpIn(p.chest, s * 0.1, 0.58, -0.2); mesh(bx(0.11, 0.5, 0.025), lam(RED), 0, -0.25, 0, t); const t2 = grpIn(t, 0, -0.5, 0); mesh(bx(0.1, 0.34, 0.025), lam(RED), 0, -0.17, 0, t2); t.userData.t2 = t2; t.userData.s = s; return t; });
   // pauldron, bracers, cuffs
   mesh(new T.SphereGeometry(0.16, 9, 6, 0, 6.3, 0, 1.6), lam(LEATHER), 0.02, 0.03, 0, p.armL); mesh(new T.TorusGeometry(0.15, 0.02, 4, 12), lam(GOLD), 0.02, 0.02, 0, p.armL).rotation.x = Math.PI / 2;
-  for (const k of ['L', 'R']) { mesh(cyl(0.088, 0.078, 0.2, 7), lam(LEATHER), 0, -0.2, 0, p['elbow' + k]); mesh(cyl(0.09, 0.09, 0.03, 7), lam(GOLD), 0, -0.11, 0, p['elbow' + k]); mesh(cyl(0.12, 0.1, 0.12, 7), lam(0x6a4a30), 0, -0.08, 0, p['knee' + k]); }
+  for (const k of ['L', 'R'] as Side[]) { mesh(cyl(0.088, 0.078, 0.2, 7), lam(LEATHER), 0, -0.2, 0, p[`elbow${k}` as const]); mesh(cyl(0.09, 0.09, 0.03, 7), lam(GOLD), 0, -0.11, 0, p[`elbow${k}` as const]); mesh(cyl(0.12, 0.1, 0.12, 7), lam(0x6a4a30), 0, -0.08, 0, p[`knee${k}` as const]); }
   // hair: cap, fringe, side locks, tied tail; a teal band with a gold stud
   mesh(HG.hair, lam(HAIR), 0, 0.05, -0.02, p.head);
   for (const [hx, hz, rz] of [[-0.14, 0.2, 0.5], [0, 0.23, 0], [0.14, 0.2, -0.5]]) { const b = mesh(new T.ConeGeometry(0.085, 0.22, 5), lam(HAIR), hx, 0.17, hz, p.head); b.rotation.set(2.6, 0, rz); }
@@ -139,7 +139,7 @@ const HERO3D = (() => {
     const u16 = new Uint16Array(buf.buffer.slice(o, o + nv * 4)); o += nv * 4;
     const idx = new Uint16Array(buf.buffer.slice(o, o + ni * 2));
     const SC = 1.9, pos = new Float32Array(nv * 3), nor = new Float32Array(nv * 3), uv = new Float32Array(nv * 2), si = new Uint16Array(nv * 4), sw = new Float32Array(nv * 4);
-    const sm = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+    const sm = (a: number, b: number, x: number) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
     const W = new Float32Array(11);   // 0 hips 1 chest 2 head 3 armL 4 elbowL 5 armR 6 elbowR 7 legL 8 kneeL 9 legR 10 kneeR
     for (let i = 0; i < nv; i++) {
       const mx = -q[i * 3 + 2] / 65534, my = q[i * 3 + 1] / 65534, mz = q[i * 3] / 65534;   // model faces +x; the game faces +z
@@ -176,21 +176,21 @@ const HERO3D = (() => {
     geo.setAttribute('skinIndex', new T.BufferAttribute(si, 4)); geo.setAttribute('skinWeight', new T.BufferAttribute(sw, 4)); geo.setIndex(new T.BufferAttribute(idx, 1));
     // the old block-built body steps aside; weapons, cape, quiver and glider stay
     const p = hero.p, keep = new Set([hero.cape, hero.quiver, hero.sword, hero.shield, hero.bow, hero.glider].concat(hero.tails));
-    const hideIn = n => { if (keep.has(n)) return; if (n.isMesh) { n.visible = false; return; } for (const c of n.children) hideIn(c); };
+    const hideIn = (n: THREE.Object3D) => { if (keep.has(n as THREE.Group)) return; if ((n as THREE.Mesh).isMesh) { n.visible = false; return; } for (const c of n.children) hideIn(c); };
     hideIn(p.pivot);
     // joints move to where the sculpt actually bends
     p.head.position.set(0, 0.636, 0);
-    for (const [k, s] of [['R', -1], ['L', 1]] as [string, number][]) {
-      p['arm' + k].position.set(s * 0.186, 0.498, 0); p['elbow' + k].position.set(0, -0.285, 0); p['hand' + k].position.set(0, -0.36, 0);
-      p['leg' + k].position.set(s * 0.1425, 0.874, -0.015); p['knee' + k].position.set(0, -0.418, 0);
+    for (const [k, s] of [['R', -1], ['L', 1]] as [Side, number][]) {
+      p[`arm${k}` as const].position.set(s * 0.186, 0.498, 0); p[`elbow${k}` as const].position.set(0, -0.285, 0); p[`hand${k}` as const].position.set(0, -0.36, 0);
+      p[`leg${k}` as const].position.set(s * 0.1425, 0.874, -0.015); p[`knee${k}` as const].position.set(0, -0.418, 0);
     }
     p.zBias = 0.2;
     // a short shaped cape in two hinged panels replaces the flat board; scarf tails slim down to match the sculpted scarf
-    const cloth = (w0, w1, len, bow) => {
-      const R = 5, C = 6, th = 0.011, P = [], I = [], at = (r, c, k) => (r * (C + 1) + c) * 2 + k;
+    const cloth = (w0: number, w1: number, len: number, bow: number) => {
+      const R = 5, C = 6, th = 0.011, P = [], I = [], at = (r: number, c: number, k: number) => (r * (C + 1) + c) * 2 + k;
       for (let r = 0; r <= R; r++) for (let c = 0; c <= C; c++) { const v = r / R, u = c / C * 2 - 1, hw = w0 + (w1 - w0) * v, z = bow * u * u * (0.6 + 0.4 * v) - 0.035 * Math.sin(v * 2.6); P.push(u * hw, -v * len, z + th, u * hw, -v * len, z - th); }
       for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) { I.push(at(r, c, 0), at(r + 1, c, 0), at(r, c + 1, 0), at(r, c + 1, 0), at(r + 1, c, 0), at(r + 1, c + 1, 0), at(r, c, 1), at(r, c + 1, 1), at(r + 1, c, 1), at(r, c + 1, 1), at(r + 1, c + 1, 1), at(r + 1, c, 1)); }
-      const rim = (a, b) => I.push(a * 2, b * 2, a * 2 + 1, b * 2, b * 2 + 1, a * 2 + 1), id = (r, c) => r * (C + 1) + c;
+      const rim = (a: number, b: number) => I.push(a * 2, b * 2, a * 2 + 1, b * 2, b * 2 + 1, a * 2 + 1), id = (r: number, c: number) => r * (C + 1) + c;
       for (let c = 0; c < C; c++) { rim(id(0, c + 1), id(0, c)); rim(id(R, c), id(R, c + 1)); } for (let r = 0; r < R; r++) { rim(id(r, 0), id(r + 1, 0)); rim(id(r + 1, C), id(r, C)); }
       const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute(P, 3)); g.setIndex(I); g.computeVertexNormals(); return g;
     };
@@ -220,33 +220,33 @@ const HERO3D = (() => {
 })();
 const PL = {
   pos: new T.Vector3(0, 3.2, 66), vel: new T.Vector3(), yaw: Math.PI, grounded: true, swim: false, climb: false, glide: false, crouch: false,
-  atk: null, hold: -1, draw: -1, blocking: false, rollT: 0, rollDir: new T.Vector3(), iframes: 0, hurtT: 0, emberCd: 0, stDelay: 0, airT: 0, animT: 0,
-  lock: null, dead: false, moving: 0, sprint: false, step: 0, combo: 0, comboT: 0, queued: false, spin: 0,
+  atk: null as AttackState | null, hold: -1, draw: -1, blocking: false, rollT: 0, rollDir: new T.Vector3(), iframes: 0, hurtT: 0, emberCd: 0, stDelay: 0, airT: 0, animT: 0,
+  lock: null as Enemy | null, dead: false, moving: 0, sprint: false, step: 0, combo: 0, comboT: 0, queued: false, spin: 0,
   castT: 0, pushing: 0, landT: 0, vaultT: 0, rollBack: false, glideArm: false, chargeFx: false,
 };
 const CAM = { yaw: 0, pitch: 0.32, dist: 7.2, shake: 0, cur: new T.Vector3(0, 8, 76) };
 const keys: Record<string, boolean> = {}, mouse = { l: false, r: false };
 const lockMark = mesh(new T.ConeGeometry(0.25, 0.5, 4), glowMat(GOLD), 0, -99, 0, scene, true); lockMark.rotation.x = Math.PI;
-let hitStop = 0, timeScale = 1, cine = null;
+let hitStop = 0, timeScale = 1, cine: Cine | null = null;
 
 /* expanding shock rings */
-const rings = [];
-function addRing(x, y, z, color, maxR, dur) {
+const rings: any[] = [];
+function addRing(x: number, y: number, z: number, color: number, maxR: number, dur: number) {
   let r = rings.find(q => !q.live);
   if (!r) { r = { m: mesh(new T.RingGeometry(0.82, 1, 36).rotateX(-Math.PI / 2), new T.MeshBasicMaterial({ color, transparent: true, depthWrite: false, blending: T.AdditiveBlending, side: T.DoubleSide }), 0, 0, 0, scene, true) }; rings.push(r); }
   r.live = true; r.t = 0; r.dur = dur; r.maxR = maxR; r.m.visible = true; r.m.material.color.setHex(color); r.m.position.set(x, y, z);
 }
-function updateRings(dt) { for (const r of rings) { if (!r.live) continue; r.t += dt; const k = r.t / r.dur; if (k >= 1) { r.live = false; r.m.visible = false; continue; } const s = 0.3 + r.maxR * (1 - (1 - k) * (1 - k)); r.m.scale.set(s, 1, s); r.m.material.opacity = (1 - k) * 0.8; } }
+function updateRings(dt: number) { for (const r of rings) { if (!r.live) continue; r.t += dt; const k = r.t / r.dur; if (k >= 1) { r.live = false; r.m.visible = false; continue; } const s = 0.3 + r.maxR * (1 - (1 - k) * (1 - k)); r.m.scale.set(s, 1, s); r.m.material.opacity = (1 - k) * 0.8; } }
 
-function camForward(out) { out.set(-Math.sin(CAM.yaw), 0, -Math.cos(CAM.yaw)); return out; }
+function camForward(out: THREE.Vector3) { out.set(-Math.sin(CAM.yaw), 0, -Math.cos(CAM.yaw)); return out; }
 const _v1 = new T.Vector3(), _v2 = new T.Vector3(), _v3 = new T.Vector3();
-function useStamina(n) { G.p.st = Math.max(0, G.p.st - n); PL.stDelay = 0.7; }
+function useStamina(n: number) { G.p.st = Math.max(0, G.p.st - n); PL.stDelay = 0.7; }
 function faceAim() {
   if (PL.lock) PL.yaw = Math.atan2(PL.lock.pos.x - PL.pos.x, PL.lock.pos.z - PL.pos.z);
   else { camForward(_v1); PL.yaw = Math.atan2(_v1.x, _v1.z); }
 }
 /* nearest living foe roughly ahead of the camera: gives sword swings a gentle pull toward what you meant to hit */
-function softTarget(range) {
+function softTarget(range: number) {
   camForward(_v1); let best = null, bs = 1e9;
   for (const e of enemies) {
     if (!e.alive || (e.def.boss && e.state === 'sleep')) continue;
@@ -256,7 +256,7 @@ function softTarget(range) {
   }
   return best;
 }
-function startAttack(heavy) {
+function startAttack(heavy: boolean) {
   if (PL.rollT > 0 || PL.swim || PL.climb || PL.dead || cine) return;
   if (PL.atk) { if (!heavy) PL.queued = true; return; }
   const combo = heavy ? 0 : (PL.comboT > 0 ? (PL.combo + 1) % 3 : 0);
@@ -269,7 +269,7 @@ function startAttack(heavy) {
   PL.atk = { t: 0, dur: heavy ? 0.66 : [0.3, 0.3, 0.46][combo], hitAt: heavy ? 0.3 : [0.1, 0.1, 0.2][combo], heavy, combo, hit: false };
   sfx(heavy || combo === 2 ? 'swingBig' : 'swing');
 }
-function swordHit(heavy, combo) {
+function swordHit(heavy: any, combo: number) {
   const range = heavy ? 3.7 : combo === 2 ? 3.1 : 2.8, arc = heavy ? 3.2 : combo === 2 ? 0.9 : 1.25, fx = Math.sin(PL.yaw), fz = Math.cos(PL.yaw);
   let any = false;
   for (const e of enemies) {
@@ -285,7 +285,7 @@ function swordHit(heavy, combo) {
   if (any) { sfx(heavy || combo === 2 ? 'hitBig' : 'hit'); CAM.shake = heavy ? 0.4 : combo === 2 ? 0.28 : 0.14; hitStop = heavy ? 0.12 : combo === 2 ? 0.09 : 0.055; }
   if (heavy) addRing(PL.pos.x, PL.pos.y + 0.25, PL.pos.z, 0xeafffb, 4, 0.35);
 }
-function aimDir(start, speed, grav, out) {
+function aimDir(start: THREE.Vector3, speed: number, grav: number, out: THREE.Vector3) {
   let tx, ty, tz;
   if (PL.lock) { const e = PL.lock; tx = e.pos.x; ty = e.pos.y + e.def.height * 0.55; tz = e.pos.z; }
   else { camera.getWorldDirection(_v2); tx = camera.position.x + _v2.x * 42; ty = camera.position.y + _v2.y * 42; tz = camera.position.z + _v2.z * 42; }
@@ -293,7 +293,7 @@ function aimDir(start, speed, grav, out) {
   out.set(tx - start.x, ty - start.y + 0.5 * grav * tt * tt, tz - start.z).normalize();
   return out;
 }
-function fireArrow(power) {
+function fireArrow(power: number) {
   if (!has('arrow')) { notify('No arrows left. Fletch some from deadwood and flint.'); sfx('deny'); return; }
   G.inv.arrow--; faceAim();
   const speed = 30 + 30 * power; _v1.set(PL.pos.x + Math.sin(PL.yaw) * 0.5, PL.pos.y + 1.45, PL.pos.z + Math.cos(PL.yaw) * 0.5);
@@ -323,7 +323,7 @@ function toggleLock() {
   for (const e of enemies) { if (!e.alive || (e.def.boss && e.state === 'sleep')) continue; const d = Math.hypot(e.pos.x - PL.pos.x, e.pos.z - PL.pos.z); if (d < bd) { bd = d; best = e; } }
   PL.lock = best; if (!best) notify('No enemy in sight.'); else sfx('ui');
 }
-function hurtPlayer(dmg, sx, sz, opts?) {
+function hurtPlayer(dmg: number, sx: number, sz: number, opts?: { unblockable?: boolean }) {
   if (PL.iframes > 0 || PL.dead || MODE !== 'play' || cine) return false;
   if (PL.blocking && !(opts && opts.unblockable)) {
     const a = Math.abs(Math.atan2(sx - PL.pos.x, sz - PL.pos.z) - PL.yaw), ang = Math.min(a, Math.PI * 2 - a);
@@ -346,12 +346,12 @@ function pushBlock() {
   if (Math.abs(nx - temple.block.position.x) + Math.abs(nz - temple.block.position.z) > 0.004) { PL.pushing = 0.15; if (Math.random() < 0.25) burst(nx, 3.1, nz, 0xb9bfb3, 1, 1.5, 0.4, 2); }
   setBlock(nx, nz);
 }
-function setBlock(cx, cz) {
+function setBlock(cx: number, cz: number) {
   const b = temple.blockBox; b.x0 = cx - 1.1; b.x1 = cx + 1.1; b.z0 = cz - 1.1; b.z1 = cz + 1.1;
   temple.block.position.x = cx; temple.block.position.z = cz; G.flags.blk = [cx, cz];
 }
 
-function updatePlayer(dt) {
+function updatePlayer(dt: number) {
   const p = PL, S = G.p;
   p.iframes -= dt; p.hurtT -= dt; p.emberCd -= dt; p.stDelay -= dt; p.animT += dt; p.comboT -= dt; p.castT = (p.castT || 0) - dt; p.pushing = (p.pushing || 0) - dt;
   let ix = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0), iz = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0);
@@ -420,7 +420,7 @@ function updatePlayer(dt) {
   if (p.grounded && !p.swim && p.moving > 1.5) { p.step -= dt * p.moving; if (p.step <= 0) { p.step = 3.1; sfx(p.pos.y < WATER_Y + 0.25 ? 'wade' : inTemple(p.pos.x, p.pos.z) ? 'stepStone' : 'step'); if (p.sprint) burst(p.pos.x, p.pos.y + 0.1, p.pos.z, 0xd8d2b8, 2, 1.2, 0.35, 1); } }
   animHero(dt);
 }
-function animHero(dt) {
+function animHero(dt: number) {
   const p = PL, hp = hero.p, S = G.p;
   let mode = 'idle';
   if (p.swim) mode = 'swim'; else if (p.glide) mode = 'glide'; else if (p.vaultT > 0) mode = 'climb'; else if (!p.grounded) mode = 'air'; else if (p.climb) mode = 'climb';
@@ -468,13 +468,13 @@ function animHero(dt) {
 }
 /* ---------- gear: sword, shield and bow rebuilt to real proportions (sword ~1.04 m, shield 0.58 m, bow 1.24 m on a 1.78 m hero) ---------- */
 (() => {
-  const clear = g => { while (g.children.length) g.remove(g.children[0]); };
+  const clear = (g: THREE.Group) => { while (g.children.length) g.remove(g.children[0]); };
   const STEEL = lam(0xe6eef2), GOLDM = lam(GOLD), WOOD = lam(0x9a6436), DARKW = lam(0x6e4226), REDM = lam(0xc8452f), LEATH = lam(0x4f3524), RUNEG = glowMat(0x7ff3e0);
-  const zc = (r0, r1, h, n) => cyl(r0, r1, h, n).rotateX(Math.PI / 2);   // a cylinder lying along z
+  const zc = (r0: number, r1: number, h: number, n: number) => cyl(r0, r1, h, n).rotateX(Math.PI / 2);   // a cylinder lying along z
   // --- sword: tapered diamond blade with a rune fuller, swept guard, wrapped grip, pommel ---
   const sw = hero.sword; clear(sw); sw.position.set(0, -0.085, 0.03); sw.scale.setScalar(1);
   { const st = [[0.115, 0.034, 0.0115], [0.45, 0.031, 0.01], [0.76, 0.026, 0.008], [0.875, 0.016, 0.006], [0.95, 0.0006, 0.0006]], P = [];
-    const ring = q => [[q[1], 0, q[0]], [0, q[2], q[0]], [-q[1], 0, q[0]], [0, -q[2], q[0]]];
+    const ring = (q: any[]) => [[q[1], 0, q[0]], [0, q[2], q[0]], [-q[1], 0, q[0]], [0, -q[2], q[0]]];
     for (let i = 0; i < st.length - 1; i++) { const a = ring(st[i]), b = ring(st[i + 1]); for (let k = 0; k < 4; k++) { const k2 = (k + 1) % 4; P.push(...a[k], ...a[k2], ...b[k2], ...a[k], ...b[k2], ...b[k]); } }
     const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute(P, 3)); g.computeVertexNormals(); mesh(g, STEEL, 0, 0, 0, sw); }
   mesh(bx(0.009, 0.0245, 0.5), RUNEG, 0, 0, 0.39, sw, true);
@@ -493,7 +493,7 @@ function animHero(dt) {
     mesh(bx(0.045, 0.014, 0.2), LEATH, 0.06, -0.018, 0, sh, true); mesh(bx(0.045, 0.014, 0.2), LEATH, -0.08, -0.018, 0, sh, true); }
   // --- bow: recurve limbs swept along a curve, wrapped grip, gold nocks; string and nocked arrow follow the draw ---
   const bow = hero.bow; clear(bow); bow.position.set(0, -0.085, 0.03); bow.scale.setScalar(1);
-  { const N = 30, SEG = 7, P = [], I = [], prof = t => { const a = Math.abs(t); return [0.25 * Math.pow(a, 1.7) - 0.08 * smooth(0.76, 1, a), 0.62 * t]; };
+  { const N = 30, SEG = 7, P = [], I = [], prof = (t: number) => { const a = Math.abs(t); return [0.25 * Math.pow(a, 1.7) - 0.08 * smooth(0.76, 1, a), 0.62 * t]; };
     for (let i = 0; i <= N; i++) { const t = i / N * 2 - 1, a = Math.abs(t), [y, z] = prof(t), [y2, z2] = prof(t + 0.01), [y1, z1] = prof(t - 0.01); let ty = y2 - y1, tz = z2 - z1; const tl = Math.hypot(ty, tz); ty /= tl; tz /= tl;
       const g = smooth(0.2, 0.08, a), w = lerp(lerp(0.021, 0.0105, a), 0.019, g), h = lerp(lerp(0.0125, 0.0055, a), 0.019, g);   // flat limbs, round at the grip
       for (let k = 0; k < SEG; k++) { const u = k / SEG * 6.2832, c = Math.cos(u) * w, n = Math.sin(u) * h; P.push(c, y + n * tz, z - n * ty); } }
@@ -513,14 +513,14 @@ function animHero(dt) {
 })();
 /* point an arm: u1 and d2 are the directions of the upper arm and forearm in chest space; the elbow hinge follows from them */
 const _ax = new T.Vector3(), _ay = new T.Vector3(), _az = new T.Vector3(), _am = new T.Matrix4(), _u1 = new T.Vector3(), _d2 = new T.Vector3(), _ik = new T.Vector3(), _ie = new T.Vector3();
-function armTo(arm, elbow, u1, d2, hint) {
+function armTo(arm: THREE.Group, elbow: THREE.Group, u1: THREE.Vector3, d2: THREE.Vector3, hint: THREE.Vector3) {
   _ay.copy(u1).negate(); _az.copy(d2).addScaledVector(u1, -d2.dot(u1));
   if (_az.lengthSq() < 4e-4) _az.copy(hint).addScaledVector(u1, -hint.dot(u1));
   _az.normalize(); _ax.crossVectors(_ay, _az); _am.makeBasis(_ax, _ay, _az); arm.quaternion.setFromRotationMatrix(_am);
   elbow.rotation.set(-Math.acos(clamp(u1.dot(d2), -1, 1)), 0, 0);
 }
 /* two-bone reach: bend the arm so the wrist lands on a point in chest space, elbow swung toward the pole */
-function armReach(arm, elbow, hand, target, pole) {
+function armReach(arm: THREE.Group, elbow: THREE.Group, hand: THREE.Group, target: THREE.Vector3, pole: THREE.Vector3) {
   const L1 = -elbow.position.y, L2 = -hand.position.y; _ik.subVectors(target, arm.position); const D = _ik.length(), Dc = clamp(D, Math.abs(L1 - L2) + 0.01, L1 + L2 - 0.004); _ik.multiplyScalar(1 / D);
   const a = (L1 * L1 + Dc * Dc - L2 * L2) / (2 * Dc), h = Math.sqrt(Math.max(0, L1 * L1 - a * a));
   _ie.copy(pole).addScaledVector(_ik, -pole.dot(_ik)).normalize();
@@ -530,7 +530,7 @@ function armReach(arm, elbow, hand, target, pole) {
 const _aim = new T.Vector3(), _tg = new T.Vector3(), UP = new T.Vector3(0, 1, 0), POLE_DRAW = new T.Vector3(-0.45, 0.45, -0.8), GUARD_U = new T.Vector3(), GUARD_D = new T.Vector3();
 /* archer's stance: side-on to the target, bow arm straight, string hand drawn back to the jaw; the arrow lies along the line of sight */
 const JAW = new T.Vector3(0.045, 0.6, 0.115), _bx = new T.Vector3(), _by = new T.Vector3(), _bz = new T.Vector3(), _gp = new T.Vector3(), _nk = new T.Vector3(), _nl = new T.Vector3(), _dl = new T.Vector3();
-function bowPose(hp, dr) {
+function bowPose(hp: Rig, dr: number) {
   camera.getWorldDirection(_aim); const el = PL.lock ? 0 : clamp(Math.asin(clamp(_aim.y, -1, 1)) + 0.1, -0.55, 0.7), yaw = 1.0;
   hp.hips.rotation.y = -0.3; hp.chest.rotation.set(0, -(yaw - 0.3), 0); hp.head.rotation.set(-el * 0.6, yaw * 0.86, 0);
   _aim.set(Math.sin(yaw) * Math.cos(el), Math.sin(el), Math.cos(yaw) * Math.cos(el));   // line of sight in chest space
@@ -546,20 +546,20 @@ function bowPose(hp, dr) {
 /* ---------- carried gear: in the hand, or slung on the back while swimming or while the other weapon is out ---------- */
 const CARRY = (() => {
   const chest = hero.p.chest, AX = new T.Vector3(1, 0, 0), AZ = new T.Vector3(0, 0, 1);
-  const q = (z, x, y?) => { const r = new T.Quaternion().setFromAxisAngle(AZ, z).multiply(new T.Quaternion().setFromAxisAngle(AX, x)); if (y) r.premultiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(0, 1, 0), y)); return r; };
-  const mk = (obj, bp, bq, bs) => ({ obj, hand: obj.parent, hp: obj.position.clone(), hq: obj.quaternion.clone(), hs: obj.scale.x, bp, bq, bs, held: true });
-  const it = {
+  const q = (z: number, x: number, y?: number) => { const r = new T.Quaternion().setFromAxisAngle(AZ, z).multiply(new T.Quaternion().setFromAxisAngle(AX, x)); if (y) r.premultiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(0, 1, 0), y)); return r; };
+  const mk = (obj: THREE.Group, bp: THREE.Vector3, bq: THREE.Quaternion, bs: number) => ({ obj, hand: obj.parent, hp: obj.position.clone(), hq: obj.quaternion.clone(), hs: obj.scale.x, bp, bq, bs, held: true });
+  const it: Record<string, CarryItem> = {
     sword: mk(hero.sword, new T.Vector3(-0.21, 0.6, -0.2), q(0.52, Math.PI / 2), 0.92),      // hilt over the right shoulder, blade across the back
     shield: mk(hero.shield, new T.Vector3(0.02, 0.26, -0.255), q(0, -Math.PI / 2), 0.86),      // flat on the back, face outward
     bow: mk(hero.bow, new T.Vector3(0.13, 0.22, -0.3), new T.Quaternion().setFromAxisAngle(AZ, 1.08).multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(0, 1, 0), Math.PI / 2)), 0.9),   // strung across, opposite the sword
   };
-  const put = (k, held) => { const i = it[k]; i.held = held; (held ? i.hand : chest).add(i.obj); i.obj.position.copy(held ? i.hp : i.bp); i.obj.quaternion.copy(held ? i.hq : i.bq); i.obj.scale.setScalar(held ? i.hs : i.bs); };
+  const put = (k: string, held: any) => { const i = it[k]; i.held = held; (held ? i.hand : chest).add(i.obj); i.obj.position.copy(held ? i.hp : i.bp); i.obj.quaternion.copy(held ? i.hq : i.bq); i.obj.scale.setScalar(held ? i.hs : i.bs); };
   const DUR = 0.42; let t = 0, done = true, first = true;
-  const want = () => { const sw = G.p.weapon === 'sword' && !PL.swim; return { sword: sw, shield: sw, bow: G.p.weapon === 'bow' && !PL.swim }; };
+  const want = (): Record<string, boolean> => { const sw = G.p.weapon === 'sword' && !PL.swim; return { sword: sw, shield: sw, bow: G.p.weapon === 'bow' && !PL.swim }; };
   const settle = () => { const w = want(); for (const k in it) if (it[k].held !== w[k]) put(k, w[k]); done = true; };
   return {
     it, snap() { t = 0; settle(); first = false; },
-    update(dt) {
+    update(dt: number) {
       hero.sword.visible = hero.shield.visible = true; hero.bow.visible = !!G.p.hasBow;
       if (first) { this.snap(); return; }
       const w = want(); let diff = false; for (const k in it) if (it[k].held !== w[k]) diff = true;
@@ -567,19 +567,19 @@ const CARRY = (() => {
       else if (diff) { if (PL.atk || PL.draw >= 0 || PL.dead) settle(); else { t = DUR; done = false; } }
     },
     // the reach over the shoulder; gear on the back keeps its slung orientation whatever the hand animation asked for
-    pose(hp) {
+    pose(hp: Rig) {
       if (t > 0) { const k = Math.sin((1 - t / DUR) * Math.PI); hp.armR.rotation.set(lerp(hp.armR.rotation.x, -2.75, k), 0, lerp(hp.armR.rotation.z, -0.25, k)); hp.elbowR.rotation.x = lerp(hp.elbowR.rotation.x, -2.0, k); hp.armL.rotation.set(lerp(hp.armL.rotation.x, -2.75, k), 0, lerp(hp.armL.rotation.z, 0.25, k)); hp.elbowL.rotation.x = lerp(hp.elbowL.rotation.x, -2.0, k); }
       for (const k in it) if (!it[k].held) it[k].obj.quaternion.copy(it[k].bq);
     },
   };
 })();
-let _bigC = null;
-function camHits(cx, cz, cy) {   // tents, giant trunks, the windmill: anything wide enough to hide the hero
+let _bigC: string|any[] = null;
+function camHits(cx: number, cz: number, cy: number) {   // tents, giant trunks, the windmill: anything wide enough to hide the hero
   if (!_bigC) _bigC = circles.filter(c => c.r >= 1.6).map(c => ({ c, top: groundAt(c.x, c.z) + 3.4 }));
   for (let i = 0; i < _bigC.length; i++) { const b = _bigC[i], dx = cx - b.c.x, dz = cz - b.c.z; if (b.c.on && cy < b.top && dx * dx + dz * dz < b.c.r * b.c.r) return true; }
   return false;
 }
-function updateCamera(dt, instant?) {
+function updateCamera(dt: number, instant?: boolean) {
   const p = PL, aiming = G.p.weapon === 'bow' && (mouse.r || p.draw >= 0) && MODE === 'play';
   const ks = 1.9 * dt; if (keys.ArrowLeft) CAM.yaw += ks; if (keys.ArrowRight) CAM.yaw -= ks; if (keys.ArrowUp) CAM.pitch += ks * 0.6; if (keys.ArrowDown) CAM.pitch -= ks * 0.6;
   if (p.lock) { const want = Math.atan2(-(p.lock.pos.x - p.pos.x), -(p.lock.pos.z - p.pos.z)); CAM.yaw = angLerp(CAM.yaw, want, 5 * dt); }
@@ -598,20 +598,20 @@ function updateCamera(dt, instant?) {
   camera.fov = lerp(camera.fov, aiming ? 48 : (p.sprint ? 67 : 60), 1 - Math.exp(-8 * dt)); camera.updateProjectionMatrix();
 }
 /* short scripted camera moves (boss entrance, enrage, fall) */
-function startCine(dur, camFn, onEnd?) {
+function startCine(dur: number, camFn: Cine['camFn'], onEnd?: () => void) {
   cine = { t: 0, dur, camFn, onEnd }; document.body.classList.add('cine');
   for (const k in keys) keys[k] = false; mouse.l = mouse.r = false; PL.hold = -1; PL.draw = -1; PL.atk = null; PL.queued = false; PL.lock = null;
 }
-function updateCine(dt) {
+function updateCine(dt: number) {
   cine.t += dt; cine.camFn(clamp(cine.t / cine.dur, 0, 1), cine.t);
   if (CAM.shake > 0) { CAM.shake -= dt; const s = CAM.shake * 0.4; camera.position.x += rand(-s, s); camera.position.y += rand(-s, s); }
   if (cine.t >= cine.dur) { const c = cine; cine = null; timeScale = 1; document.body.classList.remove('cine'); camera.fov = 60; camera.updateProjectionMatrix(); if (c.onEnd) c.onEnd(); updateCamera(0.016, true); }
 }
 
 /* ---------- projectiles ---------- */
-const projs = [];
+const projs: any[] = [];
 const PGEO = { arrow: (() => { const g = cyl(0.025, 0.025, 1, 4); g.rotateX(Math.PI / 2); return g; })(), orb: sph(0.26, 8, 6) };
-function spawnProj(type, pos, dir, speed, dmg, mine) {
+function spawnProj(type: string, pos: THREE.Vector3, dir: THREE.Vector3, speed: number, dmg: number, mine: boolean) {
   let pr = projs.find(q => !q.live && q.type === type);
   if (!pr) {
     let m;
@@ -622,8 +622,8 @@ function spawnProj(type, pos, dir, speed, dmg, mine) {
   pr.live = true; pr.pos.copy(pos); pr.vel.copy(dir).multiplyScalar(speed); pr.dmg = dmg; pr.mine = mine; pr.life = type === 'spore' ? 6 : 3.2; pr.m.visible = true; pr.grav = type === 'arrow' ? 9 : 0; pr.m.position.copy(pos);
   return pr;
 }
-function killProj(pr, fx?) { pr.live = false; pr.m.visible = false; if (fx) { burst(pr.pos.x, pr.pos.y, pr.pos.z, pr.type === 'fire' ? 0xff8a3c : pr.type === 'spore' ? 0xc77bff : 0xe8dcc0, pr.type === 'arrow' ? 4 : 16, pr.type === 'arrow' ? 3 : 5, 0.45); if (pr.type === 'fire') addRing(pr.pos.x, pr.pos.y, pr.pos.z, 0xff9a4a, 1.8, 0.3); } }
-function updateProjs(dt) {
+function killProj(pr: Projectile, fx?: boolean) { pr.live = false; pr.m.visible = false; if (fx) { burst(pr.pos.x, pr.pos.y, pr.pos.z, pr.type === 'fire' ? 0xff8a3c : pr.type === 'spore' ? 0xc77bff : 0xe8dcc0, pr.type === 'arrow' ? 4 : 16, pr.type === 'arrow' ? 3 : 5, 0.45); if (pr.type === 'fire') addRing(pr.pos.x, pr.pos.y, pr.pos.z, 0xff9a4a, 1.8, 0.3); } }
+function updateProjs(dt: number) {
   for (const pr of projs) {
     if (!pr.live) continue;
     pr.life -= dt; if (pr.life <= 0) { killProj(pr); continue; }
@@ -655,13 +655,13 @@ function updateProjs(dt) {
 }
 
 /* ---------- loot drops ---------- */
-const drops = [];
-function dropLoot(x, z, items, coins) {
+const drops: any[] = [];
+function dropLoot(x: number, z: number, items: Record<string, number>, coins: any) {
   const m = new T.Group(); m.position.set(x, groundAt(x, z) + 0.6, z); scene.add(m);
   mesh(new T.OctahedronGeometry(0.24), glowMat(GOLD), 0, 0, 0, m, true); halo(m, 0, 0, 0, 2.2, GOLD, 0.6);
   drops.push({ m, x, z, items, coins, t: 0 });
 }
-function updateDrops(dt) {
+function updateDrops(dt: number) {
   for (let i = drops.length - 1; i >= 0; i--) {
     const d = drops[i]; d.t += dt; const by = Math.max(groundAt(d.x, d.z), WATER_Y) + 0.6 + Math.sin(d.t * 4) * 0.12; d.m.rotation.y += dt * 3;
     const dist = Math.hypot(PL.pos.x - d.x, PL.pos.z - d.z);
@@ -675,15 +675,15 @@ function updateDrops(dt) {
 }
 
 /* ---------- enemies ---------- */
-const EDEF = {
+const EDEF: Record<string, EnemyDef> = {
   goblin: { name: 'Thicket Goblin', hp: 38, dmg: 8, speed: 4.9, detect: 15, leash: 46, range: 2.1, windup: 0.5, recover: 0.8, xp: 14, radius: 0.5, height: 1.5, scale: 0.82, respawn: 150, loot: [['fang', 0.6, 1], ['arrow', 0.5, 3], ['berry', 0.25, 1]], coins: [2, 6] },
   sentinel: { name: 'Hollow Sentinel', hp: 95, dmg: 17, speed: 3.1, detect: 13, leash: 30, range: 2.7, windup: 0.85, recover: 1.1, xp: 34, radius: 0.7, height: 2.6, scale: 1.45, respawn: 260, loot: [['core', 1, 1], ['crystal', 0.5, 1]], coins: [6, 12] },
   boar: { name: 'Mossback Boar', hp: 50, dmg: 11, speed: 6.6, detect: 14, leash: 55, range: 2.0, windup: 0.4, recover: 1.0, xp: 12, radius: 0.75, height: 1.2, scale: 1, passive: true, respawn: 180, loot: [['meat', 1, 2]], coins: [0, 0] },
   wisp: { name: 'Gloomwing', hp: 24, dmg: 9, speed: 4.2, detect: 19, leash: 46, range: 11, xp: 16, radius: 0.6, height: 1.1, scale: 1, fly: true, cd: 2.5, respawn: 150, loot: [['crystal', 0.5, 1]], coins: [1, 4] },
   boss: { name: 'The Ancient Forest Guardian', hp: 640, dmg: 22, speed: 2.3, radius: 2.4, height: 6.6, scale: 1, boss: true, xp: 260 },
 };
-const enemies = [];
-function buildEnemy(type) {
+const enemies: Enemy[] = [];
+function buildEnemy(type: string) {
   if (type === 'goblin') {
     const sk = [0x7fae4a, 0x6f9a52, 0x8fb04a][(Math.random() * 3) | 0];
     const h = humanoid({ skin: sk, top: 0x8a5a30, bottom: 0x5a4630, boot: sk, s: 0.82, eye: 0xffe066, headScale: 1.28, lean: 0.16, bare: true, skirt: 0x6b4a30 });
@@ -744,16 +744,16 @@ function buildEnemy(type) {
   }
   return { g, p };
 }
-function spawnEnemy(type, x, z) {
+function spawnEnemy(type: string, x: number, z: number) {
   const b = buildEnemy(type), def = EDEF[type];
-  const e = { type, def, g: b.g, p: b.p, pos: new T.Vector3(x, groundAt(x, z), z), home: { x, z }, yaw: rng() * 6, hp: def.hp, state: 'idle', t: 0, wait: 1 + rng() * 3, cd: 0, alive: true, deadT: 0, aggro: false, kb: new T.Vector3(), tx: x, tz: z, anim: rng() * 5, punch: 0, flash: 0, mats: ownMaterials(b.g) };
+  const e: Enemy = { type, def, g: b.g, p: b.p as Rig & CreatureRig, pos: new T.Vector3(x, groundAt(x, z), z), home: { x, z }, yaw: rng() * 6, hp: def.hp, state: 'idle', t: 0, wait: 1 + rng() * 3, cd: 0, alive: true, deadT: 0, aggro: false, kb: new T.Vector3(), tx: x, tz: z, anim: rng() * 5, punch: 0, flash: 0, mats: ownMaterials(b.g) };
   addOutline(e.g, def.boss ? 0.05 : 0.014); scene.add(e.g); enemies.push(e); return e;
 }
-function reviveEnemy(e) {
+function reviveEnemy(e: Enemy) {
   e.alive = true; e.hp = e.def.hp; e.state = e.def.boss ? 'sleep' : 'idle'; e.t = 0; e.aggro = false; e.deadT = 0; e.flash = 0; e.pos.set(e.home.x, groundAt(e.home.x, e.home.z), e.home.z);
   e.g.visible = true; e.g.rotation.set(0, e.yaw, 0); e.g.scale.setScalar(e.def.scale); e.g.position.copy(e.pos); e.kb.set(0, 0, 0); for (const m of e.mats) m.emissive.setRGB(0, 0, 0);
 }
-function damageEnemy(e, dmg, o) {
+function damageEnemy(e: Enemy, dmg: number, o: HitOptions) {
   if (!e.alive) return;
   if (e.def.boss) { if (e.state === 'sleep' || e.state === 'wake') return; dmg *= (e.state === 'stun' ? 2 : 0.5) * (o.fire ? 1.5 : 1); }
   else { e.kb.set(o.kx || 0, 0, o.kz || 0).multiplyScalar(o.kb || 0); if (e.state !== 'windup' || dmg > 20) { e.state = 'stagger'; e.t = 0; } e.aggro = true; if (e.def.passive) for (const f of enemies) if (f.type === e.type && f.alive && f.pos.distanceTo(e.pos) < 14) f.aggro = true; }
@@ -762,16 +762,16 @@ function damageEnemy(e, dmg, o) {
   burst(e.pos.x, e.pos.y + e.def.height * 0.6, e.pos.z, o.fire ? 0xff8a3c : 0xfff2c0, o.crit ? 14 : 7, 5, 0.35);
   if (e.hp <= 0) killEnemy(e);
 }
-function killEnemy(e) {
+function killEnemy(e: Enemy) {
   e.alive = false; e.deadT = 0; e.hp = 0; if (PL.lock === e) PL.lock = null;
   gainXp(e.def.xp); sfx('die');
   if (e.def.boss) { bossDefeated(e); return; }
-  const items = {}; for (const [id, ch, n] of e.def.loot) if (Math.random() < ch) items[id] = 1 + (Math.random() * n | 0);
+  const items: Record<string, number> = {}; for (const [id, ch, n] of e.def.loot) if (Math.random() < ch) items[id] = 1 + (Math.random() * n | 0);
   const coins = e.def.coins[0] + (Math.random() * (e.def.coins[1] - e.def.coins[0] + 1) | 0);
   if (Object.keys(items).length || coins) dropLoot(e.pos.x, e.pos.z, items, coins);
   G.kills++; if (e.type === 'goblin') questEvent('goblin');
 }
-function moveEnt(e, tx, tz, speed, dt) {
+function moveEnt(e: Enemy, tx: number, tz: number, speed: number, dt: number) {
   const dx = tx - e.pos.x, dz = tz - e.pos.z, d = Math.hypot(dx, dz); if (d < 0.05) return;
   const ox = e.pos.x, oz = e.pos.z;
   e.pos.x += dx / d * speed * dt; e.pos.z += dz / d * speed * dt; e.yaw = angLerp(e.yaw, Math.atan2(dx, dz), 9 * dt);
@@ -779,7 +779,7 @@ function moveEnt(e, tx, tz, speed, dt) {
   if (!e.def.fly && groundAt(e.pos.x, e.pos.z) < WATER_Y - 0.2) { e.pos.x = ox; e.pos.z = oz; }
   e.moved = true;
 }
-function updateEnemy(e, dt) {
+function updateEnemy(e: Enemy, dt: number) {
   const D = e.def;
   if (!e.alive) {
     e.deadT += dt;
@@ -832,22 +832,22 @@ function updateEnemy(e, dt) {
   const fl = Math.max(0, e.flash) * 6, tp = tele > 0 ? (0.25 + 0.75 * tele) * (0.6 + 0.4 * Math.sin(e.anim * 30)) : 0;
   for (const m of e.mats) m.emissive.setRGB(fl + tp * 0.9, fl + tp * 0.28, fl + tp * 0.08);
   if (e.p.hips) animHumanoid(e.p, pose !== 'idle' ? pose : e.moved ? (e.state === 'chase' ? 'run' : 'walk') : 'idle', e.anim, dt);
-  else if (e.type === 'boar') { const s = e.moved ? Math.sin(e.anim * 15) * 0.7 : 0; e.p.legs.forEach((l, i) => l.rotation.x = (i === 0 || i === 3) ? s : -s); e.p.body.position.y = 0.85 + (e.moved ? Math.abs(Math.cos(e.anim * 15)) * 0.06 : Math.sin(e.anim * 2) * 0.02); e.p.headG.rotation.x = pose === 'windup' ? 0.5 : pose === 'strike' ? -0.5 : pose === 'stagger' ? -0.3 : Math.sin(e.anim * 1.3) * 0.1; if (pose === 'windup' && Math.random() < 0.3) burst(e.pos.x - Math.sin(e.yaw) * 0.8, e.pos.y + 0.1, e.pos.z - Math.cos(e.yaw) * 0.8, 0xd8d2b8, 1, 2, 0.3, 2); }
-  else if (e.type === 'wisp') { e.p.wings.forEach(w => w.rotation.z = w.userData.s * Math.sin(e.anim * 16) * 0.75); e.p.tail.forEach((t, k) => { t.position.x = Math.sin(e.anim * 5 - k * 0.9) * 0.14 * (k + 1); t.position.y = Math.cos(e.anim * 4 - k) * 0.06 * (k + 1); }); e.p.body.scale.setScalar(1 + tele * 0.3); }
+  else if (e.type === 'boar') { const s = e.moved ? Math.sin(e.anim * 15) * 0.7 : 0; e.p.legs.forEach((l: THREE.Object3D, i: number) => l.rotation.x = (i === 0 || i === 3) ? s : -s); e.p.body.position.y = 0.85 + (e.moved ? Math.abs(Math.cos(e.anim * 15)) * 0.06 : Math.sin(e.anim * 2) * 0.02); e.p.headG.rotation.x = pose === 'windup' ? 0.5 : pose === 'strike' ? -0.5 : pose === 'stagger' ? -0.3 : Math.sin(e.anim * 1.3) * 0.1; if (pose === 'windup' && Math.random() < 0.3) burst(e.pos.x - Math.sin(e.yaw) * 0.8, e.pos.y + 0.1, e.pos.z - Math.cos(e.yaw) * 0.8, 0xd8d2b8, 1, 2, 0.3, 2); }
+  else if (e.type === 'wisp') { e.p.wings.forEach((w: THREE.Object3D) => w.rotation.z = w.userData.s * Math.sin(e.anim * 16) * 0.75); e.p.tail.forEach((t: THREE.Object3D, k: number) => { t.position.x = Math.sin(e.anim * 5 - k * 0.9) * 0.14 * (k + 1); t.position.y = Math.cos(e.anim * 4 - k) * 0.06 * (k + 1); }); e.p.body.scale.setScalar(1 + tele * 0.3); }
 }
 
 /* ---------- boss: the Ancient Forest Guardian ---------- */
-const hazards = [];
+const hazards: any[] = [];
 const HZ = { ring: new T.RingGeometry(0.9, 1, 36).rotateX(-Math.PI / 2), disc: new T.CircleGeometry(1, 30).rotateX(-Math.PI / 2), spike: new T.ConeGeometry(0.45, 3.4, 5), runes: new T.RingGeometry(0.62, 0.7, 8, 1).rotateX(-Math.PI / 2) };
-function addHazard(x, z, r, delay, dmg, spikes) {
+function addHazard(x: number, z: number, r: number, delay: number, dmg: number, spikes: boolean) {
   const y = groundAt(x, z) + 0.12, g = new T.Group(); g.position.set(x, y, z); scene.add(g);
-  const mk = (op) => new T.MeshBasicMaterial({ color: spikes ? 0xff7a3c : 0xff4a3c, transparent: true, opacity: op, depthWrite: false, side: T.DoubleSide });
+  const mk = (op: number) => new T.MeshBasicMaterial({ color: spikes ? 0xff7a3c : 0xff4a3c, transparent: true, opacity: op, depthWrite: false, side: T.DoubleSide });
   const ring = mesh(HZ.ring, mk(0.95), 0, 0, 0, g, true); ring.scale.set(r, 1, r);
   const disc = mesh(HZ.disc, mk(0.22), 0, -0.02, 0, g, true); disc.scale.set(0.01, 1, 0.01);
   const ru = mesh(HZ.runes, mk(0.6), 0, 0.01, 0, g, true); ru.scale.set(r, 1, r);
   hazards.push({ g, disc, ru, x, z, r, t: 0, delay, dmg, spikes, done: false });
 }
-function updateHazards(dt) {
+function updateHazards(dt: number) {
   for (let i = hazards.length - 1; i >= 0; i--) {
     const h = hazards[i]; h.t += dt; h.ru.rotation.y += dt * 2.5;
     if (!h.done) {
@@ -865,8 +865,8 @@ function updateHazards(dt) {
   }
 }
 function clearHazards() { for (const h of hazards) scene.remove(h.g); hazards.length = 0; for (const pr of projs) if (pr.live && !pr.mine) killProj(pr); }
-let boss = null, bossFight = false;
-function bossGlow(hex, eyes?) { const P = boss.p; P.core.material.color.setHex(hex); P.coreHalo.material.color.setHex(hex); for (const c of P.cracks) c.material.color.setHex(hex); if (eyes != null) P.eyes.forEach(m => m.material.color.setHex(eyes)); }
+let boss: Enemy | null = null, bossFight = false;
+function bossGlow(hex: number, eyes?: number) { const P = boss.p; P.core.material.color.setHex(hex); P.coreHalo.material.color.setHex(hex); for (const c of P.cracks) c.material.color.setHex(hex); if (eyes != null) P.eyes.forEach((m: { material: { color: { setHex: (arg0: any) => any; }; }; }) => m.material.color.setHex(eyes)); }
 function bossReset() {
   bossFight = false; clearHazards(); if (cine) { cine = null; timeScale = 1; document.body.classList.remove('cine'); }
   if (!boss) return;
@@ -874,7 +874,7 @@ function bossReset() {
   reviveEnemy(boss); boss.yaw = Math.PI / 2; boss.g.rotation.y = boss.yaw; boss.phase = 1; boss.p.pivot.rotation.set(0, 0, 0); boss.p.pivot.position.y = -1.4; boss.p.core.scale.setScalar(1);
   bossGlow(0x1f5f58, 0x2f5560); boss.p.coreHalo.material.opacity = 0.2;
 }
-function updateBoss(e, dt) {
+function updateBoss(e: Enemy, dt: number) {
   const P = e.p;
   if (!e.alive) {
     if (e.g.visible && e.deadT < 6) { e.deadT += dt; const k = smooth(0.4, 3, e.deadT); P.pivot.rotation.x = k * 1.45; P.pivot.position.y = -k * 2.2; P.armL.rotation.x = P.armR.rotation.x = lerp(P.armL.rotation.x, 0.6, dt * 2); if (Math.random() < 0.7) burst(e.pos.x + rand(-2.5, 2.5), e.pos.y + rand(0, 4), e.pos.z + rand(-2.5, 2.5), Math.random() < 0.5 ? RUNE : 0xc8ffb0, 2, 3, 1.2, -4); P.coreHalo.material.opacity = Math.max(0, 0.8 - e.deadT * 0.25); for (const m of e.mats) m.emissive.setRGB(0, 0, 0); }
@@ -886,7 +886,7 @@ function updateBoss(e, dt) {
     if (!G.flags.boss && G.flags.puz3 && PL.pos.x < -131.5 && inTemple(PL.pos.x, PL.pos.z) && !PL.dead) {
       bossFight = true; e.state = 'wake'; e.t = 0; sfx('rumble'); banner('The Ancient Forest Guardian', 'It has slept for three hundred years');
       const bx0 = e.pos.x, bz0 = e.pos.z;
-      startCine(3.7, (k) => { const a = lerp(-0.25, 0.95, smooth(0, 1, k)), r = lerp(15, 9.5, smooth(0, 1, k)); camera.position.set(bx0 + Math.cos(a) * r, 3 + lerp(1.4, 3.6, k), bz0 + Math.sin(a) * r); camera.lookAt(bx0, 3 + lerp(2.2, 5.2, smooth(0.1, 0.8, k)), bz0); camera.fov = lerp(52, 60, k); camera.updateProjectionMatrix(); });
+      startCine(3.7, (k: number) => { const a = lerp(-0.25, 0.95, smooth(0, 1, k)), r = lerp(15, 9.5, smooth(0, 1, k)); camera.position.set(bx0 + Math.cos(a) * r, 3 + lerp(1.4, 3.6, k), bz0 + Math.sin(a) * r); camera.lookAt(bx0, 3 + lerp(2.2, 5.2, smooth(0.1, 0.8, k)), bz0); camera.fov = lerp(52, 60, k); camera.updateProjectionMatrix(); });
     }
     return;
   }
@@ -929,7 +929,7 @@ function updateBoss(e, dt) {
     P.core.scale.setScalar(1); bossGlow(0xff7a3c, 0xff7a3c); P.coreHalo.material.opacity = 0.6;
     burst(e.pos.x, e.pos.y + 4, e.pos.z, 0xff7a3c, 50, 11, 1); addRing(e.pos.x, 3.15, e.pos.z, 0xff7a3c, 18, 0.8); const pd = d || 1; PL.vel.x += dx / pd * 16; PL.vel.z += dz / pd * 16; clearHazards();
     const fx = Math.sin(e.yaw), fz = Math.cos(e.yaw), ex = e.pos.x, ez = e.pos.z;
-    startCine(1.9, (k) => { const a = lerp(-0.5, 0.5, k); camera.position.set(ex + (fx * Math.cos(a) - fz * Math.sin(a)) * lerp(11, 8, k), 6.4, ez + (fz * Math.cos(a) + fx * Math.sin(a)) * lerp(11, 8, k)); camera.lookAt(ex, 9, ez); });
+    startCine(1.9, (k: number) => { const a = lerp(-0.5, 0.5, k); camera.position.set(ex + (fx * Math.cos(a) - fz * Math.sin(a)) * lerp(11, 8, k), 6.4, ez + (fz * Math.cos(a) + fx * Math.sin(a)) * lerp(11, 8, k)); camera.lookAt(ex, 9, ez); });
   }
   const kk = 1 - Math.exp(-(e.state === 'stun' ? 22 : 9) * dt);
   P.armR.rotation.x = lerp(P.armR.rotation.x, armR, kk); P.armL.rotation.x = lerp(P.armL.rotation.x, armL, kk); P.foreR.rotation.x = lerp(P.foreR.rotation.x, foreR, kk); P.foreL.rotation.x = lerp(P.foreL.rotation.x, foreL, kk);

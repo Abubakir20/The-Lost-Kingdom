@@ -13,20 +13,20 @@ function audioInit() {
     applyVolume();
   } catch (e) { AU.ctx = null; }
 }
-function loopNoise(freq, q, type) { const c = AU.ctx, s = c.createBufferSource(); s.buffer = AU.noise; s.loop = true; const f = c.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q; const g = c.createGain(); g.gain.value = 0; s.connect(f); f.connect(g); g.connect(AU.sfx); s.start(); return g; }
+function loopNoise(freq: number, q: number, type: BiquadFilterType) { const c = AU.ctx, s = c.createBufferSource(); s.buffer = AU.noise; s.loop = true; const f = c.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q; const g = c.createGain(); g.gain.value = 0; s.connect(f); f.connect(g); g.connect(AU.sfx); s.start(); return g; }
 function applyVolume() { if (!AU.ctx) return; AU.master.gain.value = SETTINGS.master; AU.mus.gain.value = SETTINGS.music; AU.sfx.gain.value = SETTINGS.sfx; }
-function tone(f, dur, type, vol, dest?, delay?, slide?) {
+function tone(f: number, dur: number, type: OscillatorType, vol: number, dest?: GainNode, delay?: number, slide?: number) {
   if (!AU.ctx) return; const c = AU.ctx, t = c.currentTime + (delay || 0), o = c.createOscillator(), g = c.createGain();
   o.type = type || 'sine'; o.frequency.setValueAtTime(f, t); if (slide) o.frequency.exponentialRampToValueAtTime(slide, t + dur);
   g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + Math.min(0.02, dur * 0.3)); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
   o.connect(g); g.connect(dest || AU.sfx); o.start(t); o.stop(t + dur + 0.05);
 }
-function nz(dur, vol, freq, type?, delay?, slide?) {
+function nz(dur: number, vol: number, freq: number, type?: BiquadFilterType, delay?: number, slide?: number) {
   if (!AU.ctx) return; const c = AU.ctx, t = c.currentTime + (delay || 0), s = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
   s.buffer = AU.noise; f.type = type || 'bandpass'; f.frequency.setValueAtTime(freq, t); if (slide) f.frequency.exponentialRampToValueAtTime(slide, t + dur);
   g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); s.connect(f); f.connect(g); g.connect(AU.sfx); s.start(t, Math.random()); s.stop(t + dur + 0.05);
 }
-function sfx(n) {
+function sfx(n: string) {
   if (!AU.ctx) return;
   switch (n) {
     case 'swing': nz(0.16, 0.25, 900, 'bandpass', 0, 2600); break;
@@ -73,7 +73,7 @@ function sfx(n) {
   }
 }
 const SCALE = [293.66, 329.63, 369.99, 440, 493.88, 587.33, 659.25, 739.99], BOSS_SCALE = [110, 130.81, 146.83, 164.81, 196, 220];
-function updateAudio(dt) {
+function updateAudio(dt: number) {
   if (!AU.ctx || AU.ctx.state !== 'running') return;
   const t = AU.ctx.currentTime, dr = Math.abs(PL.pos.x - riverX(PL.pos.z)), dfall = Math.hypot(PL.pos.x + 25, PL.pos.z + 158);
   AU.wind.gain.setTargetAtTime(MODE === 'menu' ? 0.05 : 0.035 + clamp(PL.pos.y / 60, 0, 0.1) + rainAmt * 0.05, t, 0.5);
@@ -106,7 +106,7 @@ boss = spawnEnemy('boss', -148, -40); boss.phase = 1; boss.state = 'sleep';
 /* ---------- modes & menus ---------- */
 let plocked = false, settingsBack = 'menu';
 const OVERLAYS = ['menu', 'dialog', 'panel', 'pause', 'dead', 'settings', 'end', 'credits'];
-function setMode(m) {
+function setMode(m: string) {
   MODE = m;
   for (const o of OVERLAYS) $(o).classList.toggle('show', o === m);
   $('hud').classList.toggle('show', m !== 'menu' && m !== 'credits' && !(m === 'settings' && settingsBack === 'menu'));
@@ -120,7 +120,7 @@ function setMode(m) {
 }
 function lockPointer() { try { const r = canvas.requestPointerLock && canvas.requestPointerLock(); if (r && r.catch) r.catch(() => { }); } catch (e) { /* drag fallback */ } }
 document.addEventListener('pointerlockchange', () => { const was = plocked; plocked = document.pointerLockElement === canvas; if (was && !plocked && MODE === 'play') setMode('pause'); });
-function startGame(state, fresh) {
+function startGame(state: GameState, fresh: boolean) {
   audioInit(); G = state; weather = { raining: false, next: 170, bolt: 8 }; rainAmt = 0; syncWorld();
   fade(() => { setMode('play'); if (fresh) { banner('Greenwind Valley', 'The Lost Kingdom'); notify('Move with W A S D. Look with the mouse. Press E near the glowing spirit.'); } else notify('Journey resumed.'); });
 }
@@ -135,7 +135,7 @@ $('btnPauseSettings').onclick = () => openSettings('pause');
 $('btnTitle').onclick = () => { syncSaveState(); writeSave(); setMode('menu'); };
 $('btnRespawn').onclick = respawn;
 $('btnEnd').onclick = () => setMode('play');
-function openSettings(back) {
+function openSettings(back: string) {
   settingsBack = back; audioInit();
   $<HTMLInputElement>('setMaster').value = String(SETTINGS.master); $<HTMLInputElement>('setMusic').value = String(SETTINGS.music); $<HTMLInputElement>('setSfx').value = String(SETTINGS.sfx); $<HTMLInputElement>('setSens').value = String(SETTINGS.sens); $<HTMLSelectElement>('setQuality').value = SETTINGS.quality; $<HTMLInputElement>('setInvert').checked = SETTINGS.invertY;
   setMode('settings');
@@ -198,14 +198,14 @@ window.addEventListener('mousemove', ev => {
 canvas.addEventListener('wheel', ev => { if (MODE === 'play') CAM.dist = clamp(CAM.dist + Math.sign(ev.deltaY) * 0.7, 4, 12); }, { passive: true });
 
 /* ---------- ambient life: birds and butterflies ---------- */
-const birds = [], flies = [];
+const birds: Flyer[] = [], flies: Flyer[] = [];
 {
-  const wing = s => { const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute([0, 0, 0.25, s * 1.1, 0, 0, 0, 0, -0.25], 3)); g.computeVertexNormals(); return g; }, WL = wing(1), WR = wing(-1), bm = new T.MeshBasicMaterial({ color: 0x2a3038, side: T.DoubleSide });
+  const wing = (s: number) => { const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute([0, 0, 0.25, s * 1.1, 0, 0, 0, 0, -0.25], 3)); g.computeVertexNormals(); return g; }, WL = wing(1), WR = wing(-1), bm = new T.MeshBasicMaterial({ color: 0x2a3038, side: T.DoubleSide });
   for (let f = 0; f < 3; f++) { const c = [[30, 30, 60, 46], [-90, 40, 80, 58], [70, -60, 70, 52]][f]; for (let i = 0; i < 5; i++) { const g = new T.Group(); const l = mesh(WL, bm, 0, 0, 0, g, true), r = mesh(WR, bm, 0, 0, 0, g, true); mesh(bx(0.12, 0.08, 0.6), bm, 0, 0, 0, g, true); scene.add(g); birds.push({ g, l, r, c, off: i * 0.5 + f * 2, lag: i * 0.11, side: (i % 2 ? 1 : -1) * Math.ceil(i / 2) * 1.6 }); } }
   const fw = new T.PlaneGeometry(0.16, 0.2); fw.translate(0.08, 0, 0);
   for (let i = 0; i < 12; i++) { const home = [[4, 52], [-6, 66], [70, 26], [84, 14], [108, 19], [20, 44], [-20, 20], [60, 34], [10, 70], [90, 30], [50, 24], [-4, 58]][i]; const g = new T.Group(), m = new T.MeshBasicMaterial({ color: [0xffd24a, 0xffffff, 0xff8fc7, 0x9fd8ff][i % 4], side: T.DoubleSide }); const l = mesh(fw, m, 0, 0, 0, g, true), r = mesh(fw, m, 0, 0, 0, g, true); r.scale.x = -1; scene.add(g); flies.push({ g, l, r, home, ph: i * 1.7 }); }
 }
-function updateLife(dt, t) {
+function updateLife(dt: number, t: number) {
   for (const b of birds) { const a = t * 0.11 + b.off * 0.02 + b.c[0] - b.lag * 0.5, r = b.c[2] + b.side; b.g.position.set(b.c[0] + Math.cos(a) * r, b.c[3] + Math.sin(t * 0.4 + b.off) * 3 - Math.abs(b.side) * 0.3, b.c[1] + Math.sin(a) * r); b.g.rotation.y = -a; const fl = Math.sin(t * 7 + b.off * 3) * 0.6; b.l.rotation.z = fl; b.r.rotation.z = -fl; b.g.visible = nightAmt < 0.6 && rainAmt < 0.5; }
   for (const f of flies) { const x = f.home[0] + Math.sin(t * 0.5 + f.ph) * 3 + Math.sin(t * 1.3 + f.ph * 2) * 1, z = f.home[1] + Math.cos(t * 0.4 + f.ph * 1.3) * 3; f.g.position.set(x, groundAt(x, z) + 0.9 + Math.sin(t * 2.1 + f.ph) * 0.4, z); f.g.rotation.y = t * 0.8 + f.ph; const fl = Math.abs(Math.sin(t * 14 + f.ph)) * 1.2; f.l.rotation.y = -fl; f.r.rotation.y = fl; f.g.visible = nightAmt < 0.4 && rainAmt < 0.3; }
 }

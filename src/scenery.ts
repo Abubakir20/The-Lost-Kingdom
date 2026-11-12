@@ -289,7 +289,7 @@ const waterfall = (() => {
   for (const [tx, tz] of [[-43, -164], [-8, -165], [-30, -170], [-19, -171]]) { mesh(cyl(0.2, 0.3, 3, 6), lam(0x5a3d28), tx, 20.5, tz, g); for (let k = 0; k < 3; k++) { const c = mesh(new T.ConeGeometry(1.6 - k * 0.4, 2.2, 8), lam(0x2f6a45), tx, 22 + k * 1.3, tz, g); } }
   for (let k = 0; k < 8; k++) mesh(cyl(0.04, 0.04, 3 + rng() * 4, 4), lam(VINE), -33 + (k < 4 ? k * 0.5 : 13.5 + k * 0.4), 13 - rng() * 2, -158.2, g, true);
   addBox(-48, -31.5, -173, -158); addBox(-18.5, -2, -173, -158); addBox(-48, -2, -180, -171);
-  const mk = (rep: number, a: number) => { const c = makeCanvas(64, 256), x = c.getContext('2d'); x.clearRect(0, 0, 64, 256); x.fillStyle = `rgba(214,244,250,${a})`; x.fillRect(0, 0, 64, 256); for (let i = 0; i < 70; i++) { x.fillStyle = `rgba(255,255,255,${0.35 + rng() * 0.6})`; const w = 1 + rng() * 4, px = rng() * 64, py = rng() * 256, hh = 30 + rng() * 90; for (const oy of [-256, 0]) x.fillRect(px, py + oy, w, hh); } for (let i = 0; i < 40; i++) { x.fillStyle = `rgba(90,180,210,${0.15 + rng() * 0.3})`; x.fillRect(rng() * 64, rng() * 256, 1 + rng() * 2, 20 + rng() * 60); } const t = new T.CanvasTexture(c); t.wrapS = t.wrapT = T.RepeatWrapping; t.repeat.set(rep, 1); return t; };
+  const mk = (rep: number, a: number) => { const c = makeCanvas(64, 256), x = ctx2d(c); x.clearRect(0, 0, 64, 256); x.fillStyle = `rgba(214,244,250,${a})`; x.fillRect(0, 0, 64, 256); for (let i = 0; i < 70; i++) { x.fillStyle = `rgba(255,255,255,${0.35 + rng() * 0.6})`; const w = 1 + rng() * 4, px = rng() * 64, py = rng() * 256, hh = 30 + rng() * 90; for (const oy of [-256, 0]) x.fillRect(px, py + oy, w, hh); } for (let i = 0; i < 40; i++) { x.fillStyle = `rgba(90,180,210,${0.15 + rng() * 0.3})`; x.fillRect(rng() * 64, rng() * 256, 1 + rng() * 2, 20 + rng() * 60); } const t = new T.CanvasTexture(c); t.wrapS = t.wrapT = T.RepeatWrapping; t.repeat.set(rep, 1); return t; };
   const tx = mk(3, 0.9), tx2 = mk(5, 0.0);
   const fall = mesh(new T.PlaneGeometry(13, 19, 1, 6), new T.MeshBasicMaterial({ map: tx, transparent: true, opacity: 0.9, side: T.DoubleSide }), -25, WATER_Y + 9.3, -158.4, scene, true);
   { const p = fall.geometry.attributes.position; for (let i = 0; i < p.count; i++) p.setZ(i, smooth(9.5, -9.5, p.getY(i)) * 1.1); }
@@ -321,7 +321,7 @@ function gate(id: string, X: number, color: number) {
   gates[id] = { mesh: m, box: addBox(X - 0.6, X + 0.6, TP.zc - 3, TP.zc + 3), open: false, X, hl: halo(scene, X, 7.1, TP.zc, 7, color, 0.3) };
 }
 function symbolTex(i: number) {
-  const c = makeCanvas(128, 128), x = c.getContext('2d'); x.clearRect(0, 0, 128, 128);
+  const c = makeCanvas(128, 128), x = ctx2d(c); x.clearRect(0, 0, 128, 128);
   x.strokeStyle = x.fillStyle = '#aefff0'; x.lineWidth = 8; x.lineCap = 'round'; x.shadowColor = '#7ff3e0'; x.shadowBlur = 14;
   if (i === 0) { x.beginPath(); x.arc(64, 64, 22, 0, 6.3); x.fill(); for (let k = 0; k < 8; k++) { const a = k / 8 * 6.283; x.beginPath(); x.moveTo(64 + Math.cos(a) * 34, 64 + Math.sin(a) * 34); x.lineTo(64 + Math.cos(a) * 50, 64 + Math.sin(a) * 50); x.stroke(); } }
   else if (i === 1) { x.beginPath(); x.arc(64, 64, 40, 0.9, 5.4); x.arc(82, 64, 30, 4.9, 1.4, true); x.closePath(); x.fill(); }

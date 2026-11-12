@@ -13,18 +13,20 @@ function audioInit() {
     applyVolume();
   } catch (e) { AU.ctx = null; }
 }
-function loopNoise(freq: number, q: number, type: BiquadFilterType) { const c = AU.ctx, s = c.createBufferSource(); s.buffer = AU.noise; s.loop = true; const f = c.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q; const g = c.createGain(); g.gain.value = 0; s.connect(f); f.connect(g); g.connect(AU.sfx); s.start(); return g; }
-function applyVolume() { if (!AU.ctx) return; AU.master.gain.value = SETTINGS.master; AU.mus.gain.value = SETTINGS.music; AU.sfx.gain.value = SETTINGS.sfx; }
-function tone(f: number, dur: number, type: OscillatorType, vol: number, dest?: GainNode, delay?: number, slide?: number) {
-  if (!AU.ctx) return; const c = AU.ctx, t = c.currentTime + (delay || 0), o = c.createOscillator(), g = c.createGain();
+/* the audio graph, if it has been built */
+const audio = (): AudioGraph | null => AU.ctx && AU.master && AU.mus && AU.sfx && AU.noise ? AU as AudioGraph : null;
+function loopNoise(freq: number, q: number, type: BiquadFilterType) { const A = audio(); if (!A) return null; const c = A.ctx, s = c.createBufferSource(); s.buffer = A.noise; s.loop = true; const f = c.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q; const g = c.createGain(); g.gain.value = 0; s.connect(f); f.connect(g); g.connect(A.sfx); s.start(); return g; }
+function applyVolume() { const A = audio(); if (!A) return; A.master.gain.value = SETTINGS.master; A.mus.gain.value = SETTINGS.music; A.sfx.gain.value = SETTINGS.sfx; }
+function tone(f: number, dur: number, type: OscillatorType, vol: number, dest?: GainNode | null, delay?: number, slide?: number) {
+  const A = audio(); if (!A) return; const c = A.ctx, t = c.currentTime + (delay || 0), o = c.createOscillator(), g = c.createGain();
   o.type = type || 'sine'; o.frequency.setValueAtTime(f, t); if (slide) o.frequency.exponentialRampToValueAtTime(slide, t + dur);
   g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + Math.min(0.02, dur * 0.3)); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  o.connect(g); g.connect(dest || AU.sfx); o.start(t); o.stop(t + dur + 0.05);
+  o.connect(g); g.connect(dest || A.sfx); o.start(t); o.stop(t + dur + 0.05);
 }
 function nz(dur: number, vol: number, freq: number, type?: BiquadFilterType, delay?: number, slide?: number) {
-  if (!AU.ctx) return; const c = AU.ctx, t = c.currentTime + (delay || 0), s = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
-  s.buffer = AU.noise; f.type = type || 'bandpass'; f.frequency.setValueAtTime(freq, t); if (slide) f.frequency.exponentialRampToValueAtTime(slide, t + dur);
-  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); s.connect(f); f.connect(g); g.connect(AU.sfx); s.start(t, Math.random()); s.stop(t + dur + 0.05);
+  const A = audio(); if (!A) return; const c = A.ctx, t = c.currentTime + (delay || 0), s = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
+  s.buffer = A.noise; f.type = type || 'bandpass'; f.frequency.setValueAtTime(freq, t); if (slide) f.frequency.exponentialRampToValueAtTime(slide, t + dur);
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); s.connect(f); f.connect(g); g.connect(A.sfx); s.start(t, Math.random()); s.stop(t + dur + 0.05);
 }
 function sfx(n: string) {
   if (!AU.ctx) return;
@@ -83,7 +85,7 @@ function updateAudio(dt: number) {
   AU.amb = (AU.amb || 2) - dt; if (AU.amb <= 0) { AU.amb = 1.2 + Math.random() * 4; if (rainAmt < 0.3 && !(bossFight && boss && boss.alive)) sfx(nightAmt > 0.5 ? 'cricket' : 'bird'); }
   AU.beat -= dt; if (AU.beat > 0) return;
   const fight = bossFight && boss && boss.alive;
-  if (fight) {
+  if (fight && boss) {
     AU.beat = boss.phase === 2 ? 0.22 : 0.28; AU.step++;
     if (AU.step % 2 === 0) nz(0.12, 0.3, 90, 'lowpass');
     tone(BOSS_SCALE[(AU.step * 5 + (AU.step >> 3)) % 6], 0.26, 'sawtooth', 0.045, AU.mus);

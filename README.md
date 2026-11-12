@@ -63,7 +63,7 @@ npm i -D playwright      # once, for the tools
 npm test                 # runs the 71 playthrough checks against index.html
 ```
 
-Type checking: `noImplicitAny` is on and the project compiles with no errors. Every function parameter is typed; shared structures live in `src/globals.d.ts`. A few deliberate `any`s remain where three.js internals or per-creature state don't fit a fixed shape (enemy AI fields, shader uniforms). Full `strict` mode is not on yet (null checks).
+Type checking: full `strict` mode is on and the project compiles with no errors. Every parameter is typed, values that can be missing are checked before use, and shared structures live in `src/globals.d.ts`. A few deliberate `any`s remain where per-creature AI state or shader uniforms don't fit a fixed shape.
 
 ## Credits
 

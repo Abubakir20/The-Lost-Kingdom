@@ -617,8 +617,11 @@ const bx = (w, h, d) => new T.BoxGeometry(w, h, d);
 const cyl = (rt, rb, h, s = 8) => new T.CylinderGeometry(rt, rb, h, s);
 const sph = (r, w = 10, h = 8) => new T.SphereGeometry(r, w, h);
 const STONE = 0x929b93, STONE_D = 0x717d77, MOSS = 0x6f9a45, RUNE = 0x7ff3e0, GOLD = 0xe8c36a, TIMBER = 0x6e4226;
+/* a 2D context on a canvas we made ourselves only fails if the browser is out of memory; say so instead of failing later on null */
+function ctx2d(c, o) { const x = c.getContext('2d', o); if (!x)
+    throw new Error('2D canvas unavailable'); return x; }
 function makeCanvas(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
-const glowTex = (() => { const c = makeCanvas(64, 64), x = c.getContext('2d'), g = x.createRadialGradient(32, 32, 0, 32, 32, 32); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.25, 'rgba(255,255,255,.55)'); g.addColorStop(0.6, 'rgba(255,255,255,.12)'); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.fillRect(0, 0, 64, 64); return new T.CanvasTexture(c); })();
+const glowTex = (() => { const c = makeCanvas(64, 64), x = ctx2d(c), g = x.createRadialGradient(32, 32, 0, 32, 32, 32); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.25, 'rgba(255,255,255,.55)'); g.addColorStop(0.6, 'rgba(255,255,255,.12)'); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.fillRect(0, 0, 64, 64); return new T.CanvasTexture(c); })();
 const nightHalos = [];
 /* soft additive glow; night=true makes it fade in after dusk */
 function halo(parent, x, y, z, size, color, op = 0.55, night) {
@@ -673,8 +676,10 @@ function bake(group, shadow = true) {
         out.add(m);
     }
     const par = group.parent;
-    par.remove(group);
-    par.add(out);
+    if (par) {
+        par.remove(group);
+        par.add(out);
+    }
     for (const o of keep) {
         const wp = new T.Vector3(), wq = new T.Quaternion(), ws = new T.Vector3();
         o.matrixWorld.decompose(wp, wq, ws);
@@ -698,7 +703,7 @@ function paintTex(name) {
         img.onload = () => {
             t.needsUpdate = true;
             try { // average colour, so the texture adds painted detail without shifting a material's own colour
-                const c = makeCanvas(16, 16), x = c.getContext('2d');
+                const c = makeCanvas(16, 16), x = ctx2d(c);
                 x.drawImage(img, 0, 0, 16, 16);
                 const d = x.getImageData(0, 0, 16, 16).data;
                 let r = 0, g = 0, b = 0;
@@ -715,7 +720,7 @@ function paintTex(name) {
         img.src = src;
     }
     else {
-        const c = makeCanvas(2, 2), x = c.getContext('2d');
+        const c = makeCanvas(2, 2), x = ctx2d(c);
         x.fillStyle = '#fff';
         x.fillRect(0, 0, 2, 2);
         t.image = c;
@@ -1010,7 +1015,7 @@ const terrain = (() => {
     g.setAttribute('color', new T.BufferAttribute(col, 3));
     g.computeVertexNormals();
     // painterly detail: soft brush blotches multiplied over the vertex colours
-    const cv = makeCanvas(256, 256), x = cv.getContext('2d');
+    const cv = makeCanvas(256, 256), x = ctx2d(cv);
     x.fillStyle = '#ededed';
     x.fillRect(0, 0, 256, 256);
     for (let i = 0; i < 420; i++) {
@@ -1035,7 +1040,7 @@ const terrain = (() => {
 })();
 const windU = { value: 0 };
 const waterTex = (() => {
-    const c = makeCanvas(256, 256), x = c.getContext('2d');
+    const c = makeCanvas(256, 256), x = ctx2d(c);
     x.fillStyle = '#dfe9ea';
     x.fillRect(0, 0, 256, 256);
     for (let i = 0; i < 120; i++) {
@@ -1062,7 +1067,7 @@ const waterTex = (() => {
 })();
 /* toon caustics: a tiling cell-edge pattern, sampled twice and scrolled, gives the painted 'light net' on the water */
 const causticTex = (() => {
-    const N = 128, c = makeCanvas(N, N), x = c.getContext('2d'), im = x.createImageData(N, N), cr = mulberry(9917), pts = [];
+    const N = 128, c = makeCanvas(N, N), x = ctx2d(c), im = x.createImageData(N, N), cr = mulberry(9917), pts = [];
     for (let i = 0; i < 22; i++)
         pts.push([cr() * N, cr() * N]);
     for (let j = 0; j < N; j++)
@@ -1137,7 +1142,7 @@ const water = (() => {
 })();
 /* ---------- map image (minimap + world map) ---------- */
 const mapCanvas = (() => {
-    const c = makeCanvas(MAPN, MAPN), x = c.getContext('2d'), im = x.createImageData(MAPN, MAPN), col = [0, 0, 0];
+    const c = makeCanvas(MAPN, MAPN), x = ctx2d(c), im = x.createImageData(MAPN, MAPN), col = [0, 0, 0];
     for (let j = 0; j < MAPN; j++)
         for (let i = 0; i < MAPN; i++) {
             const wx = (i + 0.5) / MAPN * WORLD * 2 - WORLD, wz = (j + 0.5) / MAPN * WORLD * 2 - WORLD, h = terrainH(wx, wz), k = (j * MAPN + i) * 4;
@@ -1187,7 +1192,8 @@ function chunked(geo, mat, items, cell, o = {}) {
         list.forEach((it, i) => {
             dummy.position.set(it.x - cx, it.y, it.z - cz);
             dummy.rotation.set(it.rx || 0, it.ry || 0, it.rz || 0);
-            dummy.scale.set(it.sx, it.sy == null ? it.sx : it.sy, it.sz == null ? it.sx : it.sz);
+            const sx = it.sx;
+            dummy.scale.set(sx, it.sy ?? sx, it.sz ?? sx);
             dummy.updateMatrix();
             m.setMatrixAt(i, dummy.matrix);
             if (it.c)
@@ -1569,7 +1575,7 @@ function buildVegetation() {
         const s = 0.35 + rng() * 0.4;
         pads.push({ x, y: WATER_Y + 0.05, z, ry: rng() * 6, sx: s, sy: 1, sz: s, c: hsl(0.3 + rng() * 0.05, 0.55, 0.36) });
         if (rng() < 0.3)
-            flowers.push && pads.push({ x: x + 0.1, y: WATER_Y + 0.14, z, ry: 0, sx: 0.16, sy: 5, sz: 0.16, c: [1, 0.72, 0.86] });
+            pads.push({ x: x + 0.1, y: WATER_Y + 0.14, z, ry: 0, sx: 0.16, sy: 5, sz: 0.16, c: [1, 0.72, 0.86] });
     }
     const reedG = new T.ConeGeometry(0.035, 1.7, 4);
     reedG.translate(0, 0.85, 0);
@@ -1756,8 +1762,8 @@ const POST = (() => {
     let main = null, ra = null, rb = null, on = false, w = 0, h = 0;
     function alloc() {
         renderer.getDrawingBufferSize(size);
-        if (main && size.x === w && size.y === h)
-            return;
+        if (main && ra && rb && size.x === w && size.y === h)
+            return [main, ra, rb];
         w = size.x;
         h = size.y;
         for (const r of [main, ra, rb])
@@ -1768,6 +1774,7 @@ const POST = (() => {
         const bw = Math.max(2, w >> 2), bh = Math.max(2, h >> 2), ob = Object.assign({ depthBuffer: false }, o);
         ra = new T.WebGLRenderTarget(bw, bh, ob);
         rb = new T.WebGLRenderTarget(bw, bh, ob);
+        return [main, ra, rb];
     }
     const pass = (m, target) => { quad.material = m; renderer.setRenderTarget(target); renderer.render(sc, cam); };
     renderer.info.autoReset = false;
@@ -1783,7 +1790,7 @@ const POST = (() => {
                 return;
             }
             try {
-                alloc();
+                const [main, ra, rb] = alloc();
                 renderer.setRenderTarget(main);
                 renderer.render(scene, camera);
                 bright.uniforms.t.value = main.texture;
@@ -1822,7 +1829,7 @@ function applyQuality() {
         sun.shadow.mapSize.set(QUALITY.shadow, QUALITY.shadow);
         if (sun.shadow.map) {
             sun.shadow.map.dispose();
-            sun.shadow.map = null;
+            sun.shadow.map = null; /* three rebuilds the map at the new size */
         }
     }
     onResize();
@@ -2474,7 +2481,7 @@ const waterfall = (() => {
     addBox(-48, -31.5, -173, -158);
     addBox(-18.5, -2, -173, -158);
     addBox(-48, -2, -180, -171);
-    const mk = (rep, a) => { const c = makeCanvas(64, 256), x = c.getContext('2d'); x.clearRect(0, 0, 64, 256); x.fillStyle = `rgba(214,244,250,${a})`; x.fillRect(0, 0, 64, 256); for (let i = 0; i < 70; i++) {
+    const mk = (rep, a) => { const c = makeCanvas(64, 256), x = ctx2d(c); x.clearRect(0, 0, 64, 256); x.fillStyle = `rgba(214,244,250,${a})`; x.fillRect(0, 0, 64, 256); for (let i = 0; i < 70; i++) {
         x.fillStyle = `rgba(255,255,255,${0.35 + rng() * 0.6})`;
         const w = 1 + rng() * 4, px = rng() * 64, py = rng() * 256, hh = 30 + rng() * 90;
         for (const oy of [-256, 0])
@@ -2547,7 +2554,7 @@ function gate(id, X, color) {
     gates[id] = { mesh: m, box: addBox(X - 0.6, X + 0.6, TP.zc - 3, TP.zc + 3), open: false, X, hl: halo(scene, X, 7.1, TP.zc, 7, color, 0.3) };
 }
 function symbolTex(i) {
-    const c = makeCanvas(128, 128), x = c.getContext('2d');
+    const c = makeCanvas(128, 128), x = ctx2d(c);
     x.clearRect(0, 0, 128, 128);
     x.strokeStyle = x.fillStyle = '#aefff0';
     x.lineWidth = 8;
@@ -4251,7 +4258,7 @@ const CARRY = (() => {
         shield: mk(hero.shield, new T.Vector3(0.02, 0.26, -0.255), q(0, -Math.PI / 2), 0.86), // flat on the back, face outward
         bow: mk(hero.bow, new T.Vector3(0.13, 0.22, -0.3), new T.Quaternion().setFromAxisAngle(AZ, 1.08).multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(0, 1, 0), Math.PI / 2)), 0.9), // strung across, opposite the sword
     };
-    const put = (k, held) => { const i = it[k]; i.held = held; (held ? i.hand : chest).add(i.obj); i.obj.position.copy(held ? i.hp : i.bp); i.obj.quaternion.copy(held ? i.hq : i.bq); i.obj.scale.setScalar(held ? i.hs : i.bs); };
+    const put = (k, held) => { const i = it[k]; i.held = held; (held && i.hand ? i.hand : chest).add(i.obj); i.obj.position.copy(held ? i.hp : i.bp); i.obj.quaternion.copy(held ? i.hq : i.bq); i.obj.scale.setScalar(held ? i.hs : i.bs); };
     const DUR = 0.42;
     let t = 0, done = true, first = true;
     const want = () => { const sw = G.p.weapon === 'sword' && !PL.swim; return { sword: sw, shield: sw, bow: G.p.weapon === 'bow' && !PL.swim }; };
@@ -4303,7 +4310,7 @@ const CARRY = (() => {
         },
     };
 })();
-let _bigC = null;
+let _bigC = null; // big rocks the camera must not clip into, built on first use
 function camHits(cx, cz, cy) {
     if (!_bigC)
         _bigC = circles.filter(c => c.r >= 1.6).map(c => ({ c, top: groundAt(c.x, c.z) + 3.4 }));
@@ -4372,6 +4379,8 @@ function startCine(dur, camFn, onEnd) {
     PL.lock = null;
 }
 function updateCine(dt) {
+    if (!cine)
+        return;
     cine.t += dt;
     cine.camFn(clamp(cine.t / cine.dur, 0, 1), cine.t);
     if (CAM.shake > 0) {
@@ -4787,7 +4796,7 @@ function killEnemy(e) {
     for (const [id, ch, n] of e.def.loot)
         if (Math.random() < ch)
             items[id] = 1 + (Math.random() * n | 0);
-    const coins = e.def.coins[0] + (Math.random() * (e.def.coins[1] - e.def.coins[0] + 1) | 0);
+    const cr = e.def.coins || [0, 0], coins = cr[0] + (Math.random() * (cr[1] - cr[0] + 1) | 0);
     if (Object.keys(items).length || coins)
         dropLoot(e.pos.x, e.pos.z, items, coins);
     G.kills++;
@@ -5048,7 +5057,8 @@ function clearHazards() { for (const h of hazards)
     if (pr.live && !pr.mine)
         killProj(pr); }
 let boss = null, bossFight = false;
-function bossGlow(hex, eyes) { const P = boss.p; P.core.material.color.setHex(hex); P.coreHalo.material.color.setHex(hex); for (const c of P.cracks)
+function bossGlow(hex, eyes) { if (!boss)
+    return; const P = boss.p; P.core.material.color.setHex(hex); P.coreHalo.material.color.setHex(hex); for (const c of P.cracks)
     c.material.color.setHex(hex); if (eyes != null)
     P.eyes.forEach((m) => m.material.color.setHex(eyes)); }
 function bossReset() {
@@ -5325,14 +5335,15 @@ function updateBoss(e, dt) {
 const D_BOSS_HALF = EDEF.boss.hp / 2;
 /* ============ systems: items, quests, dialogue, NPCs, interactables, puzzles, UI ============ */
 let MODE = 'menu';
-const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
+const esc = (s) => String(s).replace(/[&<>"]/g, c => ESC[c]);
 /* ---------- feedback ---------- */
 function notify(text, cls) {
     const box = $('notes'), el = document.createElement('div');
     el.className = 'note ' + (cls || '');
     el.textContent = text;
     box.appendChild(el);
-    while (box.children.length > 5)
+    while (box.firstChild && box.children.length > 5)
         box.removeChild(box.firstChild);
     setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 500); }, 3600);
 }
@@ -5438,7 +5449,8 @@ const QUESTS = {
     shards: { name: 'Shards of the Sunstone', kind: 'Main quest', desc: 'Three shards of the Sunstone were scattered across Greenwind Valley: one in the goblin camp south-west of the bridge, one on the high rock north of Oakrest, one on a drowned islet upriver.', reward: 'Temple Key, Ember Bolt, 100 XP',
         obj: () => [['Find the Sunstone Shards (' + shardCount() + '/3)', shardCount() >= 3], ['Return to Elder Maren', false]],
         target: () => { if (shardCount() >= 3)
-            return [NPCS.maren.pos.x, NPCS.maren.pos.z]; const c = CHESTS[SHARD_CHESTS.find(k => !G.flags[k])]; return [c.x, c.z]; } },
+            return [NPCS.maren.pos.x, NPCS.maren.pos.z]; const k = SHARD_CHESTS.find(k => !G.flags[k]); if (!k)
+            return [NPCS.maren.pos.x, NPCS.maren.pos.z]; const c = CHESTS[k]; return [c.x, c.z]; } },
     temple: { name: 'The Sealed Temple', kind: 'Main quest', desc: 'The Temple of Echoes stands west of the Old Stonebridge. Its guardian still keeps the Heart of the Forest.', reward: 'Heart of the Forest, 300 XP',
         obj: () => [['Unseal the temple gate beyond the Old Stonebridge', !!G.flags.g_entry], ['Solve the three trials (' + trialCount() + '/3)', trialCount() >= 3], ['Defeat the Ancient Forest Guardian', !!G.flags.boss], ['Take the Heart of the Forest', !!G.flags.c_boss], ['Return to Ilyra at the Shrine of Awakening', false]],
         target: () => !G.flags.g_entry ? [-75.5, -40] : !G.flags.puz1 ? [-90, -33] : !G.flags.puz2 ? [-106, -46] : !G.flags.puz3 ? [-121, -40] : !G.flags.c_boss ? [-145, -40] : [0, 58.5] },
@@ -6034,13 +6046,15 @@ function playerDied() {
     setTimeout(() => { if (PL.dead)
         setMode('dead'); }, 900);
 }
+/* where the player comes back: the last waystone touched (the shrine's at first) */
+function respawnPoint() { const L = LOCS.find(l => l.id === G.p.respawn && l.way) || LOCS[0]; return L.way || [0, 55.5]; }
 function respawn() {
-    const L = LOCS.find(l => l.id === G.p.respawn) || LOCS[0];
+    const W = respawnPoint();
     fade(() => { G.p.hp = G.p.maxHp; G.p.st = G.p.maxSt; G.p.mp = G.p.maxMp; PL.dead = false; PL.iframes = 2; bossReset(); for (const e of enemies)
         if (e.alive && !e.def.boss) {
             e.aggro = false;
             e.state = 'return';
-        } placePlayer(L.way[0] + 1.6, L.way[1] + 1.6); setMode('play'); });
+        } placePlayer(W[0] + 1.6, W[1] + 1.6); setMode('play'); });
 }
 function bossDefeated(e) {
     G.flags.boss = true;
@@ -6062,9 +6076,9 @@ function autosave() { if (MODE === 'menu')
     setTimeout(() => s.classList.remove('on'), 1400);
 } }
 function syncSaveState() { const S = G.p; S.x = PL.pos.x; S.y = PL.pos.y; S.z = PL.pos.z; S.yaw = PL.yaw; if (PL.dead || bossFight) {
-    const L = LOCS.find(l => l.id === S.respawn) || LOCS[0];
-    S.x = L.way[0] + 1.6;
-    S.z = L.way[1] + 1.6;
+    const W = respawnPoint();
+    S.x = W[0] + 1.6;
+    S.z = W[1] + 1.6;
     S.y = groundAt(S.x, S.z);
     if (S.hp <= 0)
         S.hp = S.maxHp;
@@ -6132,7 +6146,7 @@ $('panel').addEventListener('click', ev => {
     const b = ev.target.closest('[data-act]');
     if (!b)
         return;
-    const [a, v] = b.dataset.act.split(':'), S = G.p;
+    const [a, v] = (b.dataset.act || '').split(':'), S = G.p;
     if (a === 'close')
         return closePanel();
     if (a === 'tab') {
@@ -6224,6 +6238,8 @@ const SIGIL = '<svg class="sigil" viewBox="0 0 64 64" fill="none" stroke="curren
 /* dialogue with a typewriter reveal; E always advances */
 let dlgType = null;
 function renderDlg() {
+    if (!dlg)
+        return;
     const pg = dlg.pages[dlg.i], text = typeof pg === 'string' ? pg : pg.t;
     $('dlgWho').textContent = dlg.who;
     $('dlgText').textContent = '';
@@ -6306,7 +6322,7 @@ function drawBigMap() {
     const c = $('bigmap');
     if (!c)
         return;
-    const x = c.getContext('2d'), N = c.width;
+    const x = ctx2d(c), N = c.width;
     x.imageSmoothingEnabled = true;
     x.drawImage(mapCanvas, 0, 0, N, N);
     // vignette of old paper, compass rose
@@ -6391,7 +6407,7 @@ function drawBigMap() {
     x.restore();
 }
 /* ---------- HUD ---------- */
-const mini = $('minimap').getContext('2d', { willReadFrequently: true });
+const mini = ctx2d($('minimap'), { willReadFrequently: true });
 let hudT = 0, miniT = 0, pipN = 0;
 function updateHUD(dt) {
     const S = G.p;
@@ -6404,9 +6420,8 @@ function updateHUD(dt) {
     updateEnemyBars();
     for (const id in CHESTS) {
         const c = CHESTS[id];
-        if (c.open > 0 && c.open < 1) {
-            c.open = Math.min(1, c.open + dt * 2.2);
-            const k = c.open;
+        if (c.open !== undefined && c.open > 0 && c.open < 1) {
+            const k = c.open = Math.min(1, c.open + dt * 2.2);
             c.lid.rotation.x = -1.9 * (1 - Math.pow(1 - k, 3)) - Math.sin(k * 9) * 0.12 * (1 - k);
         }
     }
@@ -6441,7 +6456,7 @@ function updateHUD(dt) {
     const pr = $('prompt');
     if (nearInteract && MODE === 'play' && !cine) {
         pr.style.display = 'flex';
-        $('promptText').textContent = nearInteract._l;
+        $('promptText').textContent = nearInteract._l ?? '';
     }
     else
         pr.style.display = 'none';
@@ -6582,13 +6597,17 @@ function audioInit() {
         AU.ctx = null;
     }
 }
-function loopNoise(freq, q, type) { const c = AU.ctx, s = c.createBufferSource(); s.buffer = AU.noise; s.loop = true; const f = c.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q; const g = c.createGain(); g.gain.value = 0; s.connect(f); f.connect(g); g.connect(AU.sfx); s.start(); return g; }
-function applyVolume() { if (!AU.ctx)
-    return; AU.master.gain.value = SETTINGS.master; AU.mus.gain.value = SETTINGS.music; AU.sfx.gain.value = SETTINGS.sfx; }
+/* the audio graph, if it has been built */
+const audio = () => AU.ctx && AU.master && AU.mus && AU.sfx && AU.noise ? AU : null;
+function loopNoise(freq, q, type) { const A = audio(); if (!A)
+    return null; const c = A.ctx, s = c.createBufferSource(); s.buffer = A.noise; s.loop = true; const f = c.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q; const g = c.createGain(); g.gain.value = 0; s.connect(f); f.connect(g); g.connect(A.sfx); s.start(); return g; }
+function applyVolume() { const A = audio(); if (!A)
+    return; A.master.gain.value = SETTINGS.master; A.mus.gain.value = SETTINGS.music; A.sfx.gain.value = SETTINGS.sfx; }
 function tone(f, dur, type, vol, dest, delay, slide) {
-    if (!AU.ctx)
+    const A = audio();
+    if (!A)
         return;
-    const c = AU.ctx, t = c.currentTime + (delay || 0), o = c.createOscillator(), g = c.createGain();
+    const c = A.ctx, t = c.currentTime + (delay || 0), o = c.createOscillator(), g = c.createGain();
     o.type = type || 'sine';
     o.frequency.setValueAtTime(f, t);
     if (slide)
@@ -6597,15 +6616,16 @@ function tone(f, dur, type, vol, dest, delay, slide) {
     g.gain.exponentialRampToValueAtTime(vol, t + Math.min(0.02, dur * 0.3));
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     o.connect(g);
-    g.connect(dest || AU.sfx);
+    g.connect(dest || A.sfx);
     o.start(t);
     o.stop(t + dur + 0.05);
 }
 function nz(dur, vol, freq, type, delay, slide) {
-    if (!AU.ctx)
+    const A = audio();
+    if (!A)
         return;
-    const c = AU.ctx, t = c.currentTime + (delay || 0), s = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
-    s.buffer = AU.noise;
+    const c = A.ctx, t = c.currentTime + (delay || 0), s = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
+    s.buffer = A.noise;
     f.type = type || 'bandpass';
     f.frequency.setValueAtTime(freq, t);
     if (slide)
@@ -6614,7 +6634,7 @@ function nz(dur, vol, freq, type, delay, slide) {
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     s.connect(f);
     f.connect(g);
-    g.connect(AU.sfx);
+    g.connect(A.sfx);
     s.start(t, Math.random());
     s.stop(t + dur + 0.05);
 }
@@ -6794,7 +6814,7 @@ function updateAudio(dt) {
     if (AU.beat > 0)
         return;
     const fight = bossFight && boss && boss.alive;
-    if (fight) {
+    if (fight && boss) {
         AU.beat = boss.phase === 2 ? 0.22 : 0.28;
         AU.step++;
         if (AU.step % 2 === 0)

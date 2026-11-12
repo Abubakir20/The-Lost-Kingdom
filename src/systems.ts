@@ -1,11 +1,12 @@
 /* ============ systems: items, quests, dialogue, NPCs, interactables, puzzles, UI ============ */
 let MODE = 'menu';
-const esc = (s: string) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
+const esc = (s: string | number) => String(s).replace(/[&<>"]/g, c => ESC[c]);
 
 /* ---------- feedback ---------- */
 function notify(text: string, cls?: string) {
   const box = $('notes'), el = document.createElement('div'); el.className = 'note ' + (cls || ''); el.textContent = text; box.appendChild(el);
-  while (box.children.length > 5) box.removeChild(box.firstChild);
+  while (box.firstChild && box.children.length > 5) box.removeChild(box.firstChild);
   setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 500); }, 3600);
 }
 let bannerT = 0;
@@ -56,7 +57,7 @@ const QUESTS: Record<string, QuestDef> = {
     obj: (s: { stage: number; }) => [['Follow the road east to Oakrest', s.stage >= 1], ['Speak with Elder Maren', false]], target: () => [NPCS.maren.pos.x, NPCS.maren.pos.z] },
   shards: { name: 'Shards of the Sunstone', kind: 'Main quest', desc: 'Three shards of the Sunstone were scattered across Greenwind Valley: one in the goblin camp south-west of the bridge, one on the high rock north of Oakrest, one on a drowned islet upriver.', reward: 'Temple Key, Ember Bolt, 100 XP',
     obj: () => [['Find the Sunstone Shards (' + shardCount() + '/3)', shardCount() >= 3], ['Return to Elder Maren', false]],
-    target: () => { if (shardCount() >= 3) return [NPCS.maren.pos.x, NPCS.maren.pos.z]; const c = CHESTS[SHARD_CHESTS.find(k => !G.flags[k])]; return [c.x, c.z]; } },
+    target: () => { if (shardCount() >= 3) return [NPCS.maren.pos.x, NPCS.maren.pos.z]; const k = SHARD_CHESTS.find(k => !G.flags[k]); if (!k) return [NPCS.maren.pos.x, NPCS.maren.pos.z]; const c = CHESTS[k]; return [c.x, c.z]; } },
   temple: { name: 'The Sealed Temple', kind: 'Main quest', desc: 'The Temple of Echoes stands west of the Old Stonebridge. Its guardian still keeps the Heart of the Forest.', reward: 'Heart of the Forest, 300 XP',
     obj: () => [['Unseal the temple gate beyond the Old Stonebridge', !!G.flags.g_entry], ['Solve the three trials (' + trialCount() + '/3)', trialCount() >= 3], ['Defeat the Ancient Forest Guardian', !!G.flags.boss], ['Take the Heart of the Forest', !!G.flags.c_boss], ['Return to Ilyra at the Shrine of Awakening', false]],
     target: () => !G.flags.g_entry ? [-75.5, -40] : !G.flags.puz1 ? [-90, -33] : !G.flags.puz2 ? [-106, -46] : !G.flags.puz3 ? [-121, -40] : !G.flags.c_boss ? [-145, -40] : [0, 58.5] },
@@ -364,9 +365,11 @@ function playerDied() {
   if (PL.dead) return; PL.dead = true; PL.atk = null; PL.hold = -1; PL.draw = -1; sfx('die');
   setTimeout(() => { if (PL.dead) setMode('dead'); }, 900);
 }
+/* where the player comes back: the last waystone touched (the shrine's at first) */
+function respawnPoint(): number[] { const L = LOCS.find(l => l.id === G.p.respawn && l.way) || LOCS[0]; return L.way || [0, 55.5]; }
 function respawn() {
-  const L = LOCS.find(l => l.id === G.p.respawn) || LOCS[0];
-  fade(() => { G.p.hp = G.p.maxHp; G.p.st = G.p.maxSt; G.p.mp = G.p.maxMp; PL.dead = false; PL.iframes = 2; bossReset(); for (const e of enemies) if (e.alive && !e.def.boss) { e.aggro = false; e.state = 'return'; } placePlayer(L.way[0] + 1.6, L.way[1] + 1.6); setMode('play'); });
+  const W = respawnPoint();
+  fade(() => { G.p.hp = G.p.maxHp; G.p.st = G.p.maxSt; G.p.mp = G.p.maxMp; PL.dead = false; PL.iframes = 2; bossReset(); for (const e of enemies) if (e.alive && !e.def.boss) { e.aggro = false; e.state = 'return'; } placePlayer(W[0] + 1.6, W[1] + 1.6); setMode('play'); });
 }
 function bossDefeated(e: Enemy) {
   G.flags.boss = true; bossFight = false; clearHazards(); sfx('roar'); hitStop = 0.25;
@@ -378,7 +381,7 @@ function bossDefeated(e: Enemy) {
 }
 let lastSave = 0;
 function autosave() { if (MODE === 'menu') return; syncSaveState(); if (writeSave()) { lastSave = performance.now(); const s = $('saveIcon'); s.classList.add('on'); setTimeout(() => s.classList.remove('on'), 1400); } }
-function syncSaveState() { const S = G.p; S.x = PL.pos.x; S.y = PL.pos.y; S.z = PL.pos.z; S.yaw = PL.yaw; if (PL.dead || bossFight) { const L = LOCS.find(l => l.id === S.respawn) || LOCS[0]; S.x = L.way[0] + 1.6; S.z = L.way[1] + 1.6; S.y = groundAt(S.x, S.z); if (S.hp <= 0) S.hp = S.maxHp; } }
+function syncSaveState() { const S = G.p; S.x = PL.pos.x; S.y = PL.pos.y; S.z = PL.pos.z; S.yaw = PL.yaw; if (PL.dead || bossFight) { const W = respawnPoint(); S.x = W[0] + 1.6; S.z = W[1] + 1.6; S.y = groundAt(S.x, S.z); if (S.hp <= 0) S.hp = S.maxHp; } }
 /* bring every world object in line with G (after New Game / Continue) */
 function syncWorld() {
   for (const id in CHESTS) { const c = CHESTS[id]; c.lid.rotation.x = G.flags[id] ? -1.9 : 0; c.open = 0; c.hl.visible = !G.flags[id]; if (id === 'c_boss') { c.g.visible = !!G.flags.boss; c.col.on = !!G.flags.boss; } }
@@ -395,11 +398,11 @@ function syncWorld() {
 }
 
 /* ---------- panels ---------- */
-let panelTab: string = null, shopOpen = false;
+let panelTab: string | null = null, shopOpen = false;
 function openPanel(tab: string) { if (MODE !== 'play' && MODE !== 'panel' && MODE !== 'dialog') return; if (MODE === 'dialog') { dlg = null; } shopOpen = tab === 'shop'; panelTab = tab; setMode('panel'); renderPanel(); sfx('ui'); }
 function closePanel() { if (MODE === 'panel') { panelTab = null; shopOpen = false; setMode('play'); } }
 $('panel').addEventListener('click', ev => {
-  const b = (ev.target as HTMLElement).closest<HTMLElement>('[data-act]'); if (!b) return; const [a, v] = b.dataset.act.split(':'), S = G.p;
+  const b = (ev.target as HTMLElement).closest<HTMLElement>('[data-act]'); if (!b) return; const [a, v] = (b.dataset.act || '').split(':'), S = G.p;
   if (a === 'close') return closePanel();
   if (a === 'tab') { panelTab = v; sfx('ui'); }
   else if (a === 'use') useItem(v);

@@ -51,6 +51,8 @@ interface GameState {
   inv: Record<string, number>; q: Record<string, any>; flags: Record<string, any>; disc: Record<string, boolean>; kills: number;
 }
 
+/** The audio graph once it has been built; until then (or if the browser refuses audio) there is none. */
+interface AudioGraph { ctx: AudioContext; master: GainNode; mus: GainNode; sfx: GainNode; noise: AudioBuffer }
 interface AudioState {
   ctx: AudioContext | null; beat: number; step: number; bar: number;
   master?: GainNode; mus?: GainNode; sfx?: GainNode; noise?: AudioBuffer; wind?: any; water?: any; rain?: any; amb?: any;
@@ -68,10 +70,10 @@ interface ChunkOptions { cy?: number; extent?: number; dist?: number; grass?: bo
 interface PaintedTexture extends THREE.Texture { triGain: THREE.Vector3 }
 
 /** A scripted camera move; while one runs, input is suspended. */
-interface Cine { t: number; dur: number; camFn: (k: number, t?: number) => void; onEnd?: () => void }
+interface Cine { t: number; dur: number; camFn: (k: number, t: number) => void; onEnd?: () => void }
 interface EnemyDef {
   name: string; hp: number; dmg: number; speed: number; radius: number; height: number; xp: number; coins?: number[];
-  boss?: boolean; passive?: boolean; fly?: boolean; scale?: number; loot?: any; [stat: string]: any;
+  boss?: boolean; passive?: boolean; fly?: boolean; scale: number; loot?: any; [stat: string]: any;
 }
 /** A living creature. The fields every kind shares are listed; AI timers and per-kind state ride along on the index signature. */
 interface Enemy {
@@ -87,7 +89,7 @@ type DialogOption = [label: string, choose?: (() => void) | null];
 type DialogPage = string | { t: string; opts?: DialogOption[] };
 interface Dialog { pages: DialogPage[]; i: number; who: string; done?: () => void }
 /** Something the player can walk up to and use. */
-interface Interactable { x?: number; z?: number; r: number; label: () => string; _l?: string; [extra: string]: any }
+interface Interactable { x?: number; z?: number; r: number; /** prompt text, or null when there is nothing to do here right now */ label: () => string | null; _l?: string | null; [extra: string]: any }
 interface Objective { id?: string; name?: string; text?: string; target: any }
 
 type Side = 'L' | 'R';
@@ -96,6 +98,6 @@ interface Recipe { out: string; n: number; need: Record<string, number>; label: 
 interface QuestDef { name: string; kind: string; desc: string; reward: string; obj: (state?: any) => any[][]; target: (state?: any) => any }
 interface QualitySet { grass: number; shadow: number; pr: number; fog: number; veg: number; post: boolean }
 /** One carried piece of gear and its two homes: the hand and the back. */
-interface CarryItem { obj: THREE.Group; hand: THREE.Object3D; hp: THREE.Vector3; hq: THREE.Quaternion; hs: number; bp: THREE.Vector3; bq: THREE.Quaternion; bs: number; held: boolean }
+interface CarryItem { obj: THREE.Group; hand: THREE.Object3D | null; hp: THREE.Vector3; hq: THREE.Quaternion; hs: number; bp: THREE.Vector3; bq: THREE.Quaternion; bs: number; held: boolean }
 /** The player's moment-to-moment state (not saved). */
 interface AttackState { t: number; dur: number; hitAt: number; hit: boolean; heavy: boolean; combo: number }

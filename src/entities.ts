@@ -553,7 +553,7 @@ const CARRY = (() => {
     shield: mk(hero.shield, new T.Vector3(0.02, 0.26, -0.255), q(0, -Math.PI / 2), 0.86),      // flat on the back, face outward
     bow: mk(hero.bow, new T.Vector3(0.13, 0.22, -0.3), new T.Quaternion().setFromAxisAngle(AZ, 1.08).multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(0, 1, 0), Math.PI / 2)), 0.9),   // strung across, opposite the sword
   };
-  const put = (k: string, held: any) => { const i = it[k]; i.held = held; (held ? i.hand : chest).add(i.obj); i.obj.position.copy(held ? i.hp : i.bp); i.obj.quaternion.copy(held ? i.hq : i.bq); i.obj.scale.setScalar(held ? i.hs : i.bs); };
+  const put = (k: string, held: any) => { const i = it[k]; i.held = held; (held && i.hand ? i.hand : chest).add(i.obj); i.obj.position.copy(held ? i.hp : i.bp); i.obj.quaternion.copy(held ? i.hq : i.bq); i.obj.scale.setScalar(held ? i.hs : i.bs); };
   const DUR = 0.42; let t = 0, done = true, first = true;
   const want = (): Record<string, boolean> => { const sw = G.p.weapon === 'sword' && !PL.swim; return { sword: sw, shield: sw, bow: G.p.weapon === 'bow' && !PL.swim }; };
   const settle = () => { const w = want(); for (const k in it) if (it[k].held !== w[k]) put(k, w[k]); done = true; };
@@ -573,7 +573,7 @@ const CARRY = (() => {
     },
   };
 })();
-let _bigC: string|any[] = null;
+let _bigC: { c: CircleCollider; top: number }[] | null = null;   // big rocks the camera must not clip into, built on first use
 function camHits(cx: number, cz: number, cy: number) {   // tents, giant trunks, the windmill: anything wide enough to hide the hero
   if (!_bigC) _bigC = circles.filter(c => c.r >= 1.6).map(c => ({ c, top: groundAt(c.x, c.z) + 3.4 }));
   for (let i = 0; i < _bigC.length; i++) { const b = _bigC[i], dx = cx - b.c.x, dz = cz - b.c.z; if (b.c.on && cy < b.top && dx * dx + dz * dz < b.c.r * b.c.r) return true; }
@@ -603,6 +603,7 @@ function startCine(dur: number, camFn: Cine['camFn'], onEnd?: () => void) {
   for (const k in keys) keys[k] = false; mouse.l = mouse.r = false; PL.hold = -1; PL.draw = -1; PL.atk = null; PL.queued = false; PL.lock = null;
 }
 function updateCine(dt: number) {
+  if (!cine) return;
   cine.t += dt; cine.camFn(clamp(cine.t / cine.dur, 0, 1), cine.t);
   if (CAM.shake > 0) { CAM.shake -= dt; const s = CAM.shake * 0.4; camera.position.x += rand(-s, s); camera.position.y += rand(-s, s); }
   if (cine.t >= cine.dur) { const c = cine; cine = null; timeScale = 1; document.body.classList.remove('cine'); camera.fov = 60; camera.updateProjectionMatrix(); if (c.onEnd) c.onEnd(); updateCamera(0.016, true); }
@@ -767,7 +768,7 @@ function killEnemy(e: Enemy) {
   gainXp(e.def.xp); sfx('die');
   if (e.def.boss) { bossDefeated(e); return; }
   const items: Record<string, number> = {}; for (const [id, ch, n] of e.def.loot) if (Math.random() < ch) items[id] = 1 + (Math.random() * n | 0);
-  const coins = e.def.coins[0] + (Math.random() * (e.def.coins[1] - e.def.coins[0] + 1) | 0);
+  const cr = e.def.coins || [0, 0], coins = cr[0] + (Math.random() * (cr[1] - cr[0] + 1) | 0);
   if (Object.keys(items).length || coins) dropLoot(e.pos.x, e.pos.z, items, coins);
   G.kills++; if (e.type === 'goblin') questEvent('goblin');
 }
@@ -866,7 +867,7 @@ function updateHazards(dt: number) {
 }
 function clearHazards() { for (const h of hazards) scene.remove(h.g); hazards.length = 0; for (const pr of projs) if (pr.live && !pr.mine) killProj(pr); }
 let boss: Enemy | null = null, bossFight = false;
-function bossGlow(hex: number, eyes?: number) { const P = boss.p; P.core.material.color.setHex(hex); P.coreHalo.material.color.setHex(hex); for (const c of P.cracks) c.material.color.setHex(hex); if (eyes != null) P.eyes.forEach((m: { material: { color: { setHex: (arg0: any) => any; }; }; }) => m.material.color.setHex(eyes)); }
+function bossGlow(hex: number, eyes?: number) { if (!boss) return; const P = boss.p; P.core.material.color.setHex(hex); P.coreHalo.material.color.setHex(hex); for (const c of P.cracks) c.material.color.setHex(hex); if (eyes != null) P.eyes.forEach((m: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>) => m.material.color.setHex(eyes)); }
 function bossReset() {
   bossFight = false; clearHazards(); if (cine) { cine = null; timeScale = 1; document.body.classList.remove('cine'); }
   if (!boss) return;

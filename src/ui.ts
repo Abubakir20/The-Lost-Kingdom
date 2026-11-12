@@ -27,6 +27,7 @@ const SIGIL = '<svg class="sigil" viewBox="0 0 64 64" fill="none" stroke="curren
 /* dialogue with a typewriter reveal; E always advances */
 let dlgType: { n: number; full: string } | null = null;
 function renderDlg() {
+  if (!dlg) return;
   const pg = dlg.pages[dlg.i], text = typeof pg === 'string' ? pg : pg.t;
   $('dlgWho').textContent = dlg.who; $('dlgText').textContent = ''; dlgType = { full: text, n: 0 };
   const o = $('dlgOpts'); o.innerHTML = '';
@@ -79,7 +80,7 @@ function renderPanel() {
 }
 const w2m = (v: number, N: number) => (v + WORLD) / (WORLD * 2) * N;
 function drawBigMap() {
-  const c = $<HTMLCanvasElement>('bigmap'); if (!c) return; const x = c.getContext('2d'), N = c.width;
+  const c = $<HTMLCanvasElement>('bigmap'); if (!c) return; const x = ctx2d(c), N = c.width;
   x.imageSmoothingEnabled = true; x.drawImage(mapCanvas, 0, 0, N, N);
   // vignette of old paper, compass rose
   const vg = x.createRadialGradient(N / 2, N / 2, N * 0.3, N / 2, N / 2, N * 0.75); vg.addColorStop(0, 'rgba(120,90,40,0)'); vg.addColorStop(1, 'rgba(90,60,20,.5)'); x.fillStyle = vg; x.fillRect(0, 0, N, N);
@@ -97,13 +98,13 @@ function drawBigMap() {
 }
 
 /* ---------- HUD ---------- */
-const mini = $<HTMLCanvasElement>('minimap').getContext('2d', { willReadFrequently: true });
+const mini = ctx2d($<HTMLCanvasElement>('minimap'), { willReadFrequently: true });
 let hudT = 0, miniT = 0, pipN = 0;
 function updateHUD(dt: number) {
   const S = G.p;
   if (bannerT > 0) { bannerT -= dt; if (bannerT <= 0) $('banner').classList.remove('show'); }
   updateDlgType(dt); updateEnemyBars();
-  for (const id in CHESTS) { const c = CHESTS[id]; if (c.open > 0 && c.open < 1) { c.open = Math.min(1, c.open + dt * 2.2); const k = c.open; c.lid.rotation.x = -1.9 * (1 - Math.pow(1 - k, 3)) - Math.sin(k * 9) * 0.12 * (1 - k); } }
+  for (const id in CHESTS) { const c = CHESTS[id]; if (c.open !== undefined && c.open > 0 && c.open < 1) { const k = c.open = Math.min(1, c.open + dt * 2.2); c.lid.rotation.x = -1.9 * (1 - Math.pow(1 - k, 3)) - Math.sin(k * 9) * 0.12 * (1 - k); } }
   hudT -= dt; if (hudT > 0) return; hudT = 0.06;
   // health as sunstone pips (20 each), stamina as a ring round the level crest
   const n = Math.ceil(S.maxHp / 20), box = $('hpPips');
@@ -114,7 +115,7 @@ function updateHUD(dt: number) {
   $('mpFill').style.width = clamp(S.mp / S.maxMp * 100, 0, 100) + '%'; $('mpBar').style.width = (S.maxMp * 2.4) + 'px';
   $('xpFill').style.width = (S.xp / xpNeed(S.level) * 100) + '%'; $('lvl').textContent = String(S.level); $('coins').textContent = String(S.coins);
   const o = currentObjective(); $('objective').style.display = o ? 'block' : 'none'; if (o) { $('objTitle').textContent = o.name; $('objText').textContent = o.text; }
-  const pr = $('prompt'); if (nearInteract && MODE === 'play' && !cine) { pr.style.display = 'flex'; $('promptText').textContent = nearInteract._l; } else pr.style.display = 'none';
+  const pr = $('prompt'); if (nearInteract && MODE === 'play' && !cine) { pr.style.display = 'flex'; $('promptText').textContent = nearInteract._l ?? ''; } else pr.style.display = 'none';
   $('slotSword').classList.toggle('on', S.weapon === 'sword'); $('slotBow').classList.toggle('on', S.weapon === 'bow'); $('slotBow').classList.toggle('locked', !S.hasBow); $('slotEmber').classList.toggle('locked', !S.ember);
   $('slotEmber').classList.toggle('cool', PL.emberCd > 0 || S.mp < 18); $('arrowsN').textContent = S.hasBow ? String(G.inv.arrow || 0) : '–'; $('potN').textContent = String(G.inv.potion || 0); $('slotPot').classList.toggle('cool', !G.inv.potion);
   $('cross').classList.toggle('aim', S.weapon === 'bow'); $('cross').classList.toggle('draw', PL.draw > 0.15); $('cross').classList.toggle('lock', !!PL.lock);
@@ -122,7 +123,7 @@ function updateHUD(dt: number) {
   const hh = Math.floor(G.time * 24), mm = Math.floor((G.time * 24 - hh) * 6) * 10; $('region').textContent = regionName(); $('clock').textContent = (hh < 10 ? '0' : '') + hh + ':' + (mm < 10 ? '0' : '') + mm + (weather.raining ? ', rain' : ''); $('dayIcon').className = nightAmt > 0.5 ? 'moon' : 'sun';
   miniT -= 1; if (miniT <= 0) { miniT = 2; drawMini(o); }
 }
-function drawMini(o: Objective) {
+function drawMini(o: Objective | null) {
   const N = 150, span = 150, sc = MAPN / (WORLD * 2), x = mini;
   x.save(); x.clearRect(0, 0, N, N); x.beginPath(); x.arc(N / 2, N / 2, N / 2, 0, 6.3); x.clip();
   x.fillStyle = '#7fb0b6'; x.fillRect(0, 0, N, N);

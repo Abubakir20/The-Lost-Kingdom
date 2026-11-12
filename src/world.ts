@@ -82,9 +82,9 @@ function bake(group: THREE.Group, shadow = true) {
   const out = new T.Group();
   for (const b of by.values()) {
     let n = 0; const parts = b.list.map((o: { geometry: { index: any; toNonIndexed: () => any; clone: () => any; }; matrixWorld: any; }) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone(); g.applyMatrix4(o.matrixWorld); n += g.attributes.position.count; return g; });
-    const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3), vc = b.mat.vertexColors ? new Float32Array(n * 3).fill(1) : null; let off = 0;
-    for (const g of parts) { pos.set(g.attributes.position.array, off); if (g.attributes.normal) nor.set(g.attributes.normal.array, off); if (vc && g.attributes.color) vc.set(g.attributes.color.array, off); off += g.attributes.position.count * 3; g.dispose(); }
-    const mg = new T.BufferGeometry(); mg.setAttribute('position', new T.BufferAttribute(pos, 3)); mg.setAttribute('normal', new T.BufferAttribute(nor, 3)); if (vc) mg.setAttribute('color', new T.BufferAttribute(vc, 3));
+    const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3), vc = b.mat.vertexColors ? new Float32Array(n * 3).fill(1) : null, uv = b.mat.map ? new Float32Array(n * 2) : null; let off = 0;
+    for (const g of parts) { pos.set(g.attributes.position.array, off); if (g.attributes.normal) nor.set(g.attributes.normal.array, off); if (vc && g.attributes.color) vc.set(g.attributes.color.array, off); if (uv && g.attributes.uv) uv.set(g.attributes.uv.array, off / 3 * 2); off += g.attributes.position.count * 3; g.dispose(); }
+    const mg = new T.BufferGeometry(); mg.setAttribute('position', new T.BufferAttribute(pos, 3)); mg.setAttribute('normal', new T.BufferAttribute(nor, 3)); if (vc) mg.setAttribute('color', new T.BufferAttribute(vc, 3)); if (uv) mg.setAttribute('uv', new T.BufferAttribute(uv, 2));
     const m = new T.Mesh(mg, b.mat); m.castShadow = shadow && b.cast; m.receiveShadow = shadow; m.matrixAutoUpdate = false; out.add(m);
   }
   const par = group.parent; if (par) { par.remove(group); par.add(out); }

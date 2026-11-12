@@ -658,7 +658,7 @@ function bake(group, shadow = true) {
     for (const b of by.values()) {
         let n = 0;
         const parts = b.list.map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone(); g.applyMatrix4(o.matrixWorld); n += g.attributes.position.count; return g; });
-        const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3), vc = b.mat.vertexColors ? new Float32Array(n * 3).fill(1) : null;
+        const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3), vc = b.mat.vertexColors ? new Float32Array(n * 3).fill(1) : null, uv = b.mat.map ? new Float32Array(n * 2) : null;
         let off = 0;
         for (const g of parts) {
             pos.set(g.attributes.position.array, off);
@@ -666,6 +666,8 @@ function bake(group, shadow = true) {
                 nor.set(g.attributes.normal.array, off);
             if (vc && g.attributes.color)
                 vc.set(g.attributes.color.array, off);
+            if (uv && g.attributes.uv)
+                uv.set(g.attributes.uv.array, off / 3 * 2);
             off += g.attributes.position.count * 3;
             g.dispose();
         }
@@ -674,6 +676,8 @@ function bake(group, shadow = true) {
         mg.setAttribute('normal', new T.BufferAttribute(nor, 3));
         if (vc)
             mg.setAttribute('color', new T.BufferAttribute(vc, 3));
+        if (uv)
+            mg.setAttribute('uv', new T.BufferAttribute(uv, 2));
         const m = new T.Mesh(mg, b.mat);
         m.castShadow = shadow && b.cast;
         m.receiveShadow = shadow;
@@ -2006,6 +2010,55 @@ for (const c of [TIMBER, 0x7a4a2a, 0x8a5a30, 0xa8743c, 0x9a6a3c, 0xb07c44, 0x8a6
 /* column pieces sculpted in Blender, in units of the column's radius: a stepped plinth, two fluted drums, a capital,
    a broken drum and a fallen one. A column of any height is stacked from them. */
 const PIECE_MAT = painted(new T.MeshToonMaterial({ color: STONE, gradientMap: TOON, vertexColors: true }), 'stone', 0.5, 0.95);
+/* ivy: leaf cards along a few hanging strands, laid against a surface whose outward normal is local +z, hanging down from the origin */
+const IVY_MAT = (() => {
+    const src = (window.TLK_TEX || {}).leaves;
+    if (!src)
+        return null;
+    const img = new Image(), t = new T.Texture(img);
+    img.onload = () => { t.needsUpdate = true; };
+    img.src = src;
+    return new T.MeshLambertMaterial({ map: t, alphaTest: 0.45, vertexColors: true, side: T.DoubleSide });
+})();
+function ivy(parent, x, y, z, ry, len, wid, seed) {
+    if (!IVY_MAT)
+        return null;
+    const r = mulberry(seed), P = [], N = [], U = [], C = [], col = new T.Color(), up = new T.Vector3(0, 1, 0);
+    const card = (cx, cy, cz, sz, shade) => {
+        const tilt = (r() - 0.5) * 1.2, roll = r() * 6.283, n = new T.Vector3(Math.sin(tilt) * Math.cos(roll), Math.sin(tilt) * Math.sin(roll) + 0.3, Math.cos(tilt)).normalize();
+        const ax = up.clone().cross(n).normalize(), ay = n.clone().cross(ax).normalize(), sp = r() * 6.283, cs = Math.cos(sp), sn = Math.sin(sp);
+        const bx2 = ax.clone().multiplyScalar(cs).addScaledVector(ay, sn), by2 = ay.clone().multiplyScalar(cs).addScaledVector(ax, -sn);
+        const v = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) => new T.Vector3(cx, cy, cz).addScaledVector(bx2, a * sz).addScaledVector(by2, b * sz)), uv = [[0, 0], [1, 0], [1, 1], [0, 1]];
+        col.setHSL(0.26 + r() * 0.08, 0.48 + r() * 0.18, (0.27 + r() * 0.15) * shade);
+        for (const i of [0, 1, 2, 0, 2, 3]) {
+            P.push(v[i].x, v[i].y, v[i].z);
+            N.push(n.x * 0.5, 0.45 + n.y * 0.4, 0.55 + n.z * 0.3);
+            U.push(uv[i][0], uv[i][1]);
+            C.push(col.r, col.g, col.b);
+        }
+    };
+    const strands = Math.max(2, Math.round(wid / 0.32));
+    for (let q = 0; q < strands * 3; q++)
+        card((r() - 0.5) * wid * 1.1, r() * 0.18 - 0.05, 0.05 + r() * 0.12, 0.16 + r() * 0.1, 1.05); // the mat spilling over the top
+    for (let k = 0; k < strands; k++) {
+        let sx = (strands > 1 ? k / (strands - 1) - 0.5 : 0) * wid + (r() - 0.5) * 0.2;
+        const L = len * (0.5 + r() * 0.5);
+        for (let t = 0.1; t < L; t += 0.15) {
+            sx += (r() - 0.5) * 0.1;
+            const f = t / L, n = f < 0.3 ? 3 : 2;
+            for (let q = 0; q < n; q++)
+                card(sx + (r() - 0.5) * 0.32 * (1 - f * 0.5), -t + (r() - 0.5) * 0.1, 0.03 + r() * 0.09 * (1 - f), 0.11 + r() * 0.09 * (1 - f * 0.5), 1 - f * 0.35);
+        }
+    }
+    const g = new T.BufferGeometry();
+    g.setAttribute('position', new T.Float32BufferAttribute(P, 3));
+    g.setAttribute('normal', new T.Float32BufferAttribute(N, 3));
+    g.setAttribute('uv', new T.Float32BufferAttribute(U, 2));
+    g.setAttribute('color', new T.Float32BufferAttribute(C, 3));
+    const m = mesh(g, IVY_MAT, x, y, z, parent, true);
+    m.rotation.y = ry;
+    return m;
+}
 const PIECES = PROPS.P_PLINTH ? {
     plinth: propGeo('P_PLINTH', STONE, 40), cap: propGeo('P_CAPITAL', STONE, 40),
     drums: [propGeo('P_DRUM_A', STONE, 32), propGeo('P_DRUM_B', STONE, 32)],
@@ -2029,9 +2082,15 @@ function pillar(x, z, h, r = 0.6, collide = true, broken) {
         else
             mesh(PIECES.cap, PIECE_MAT, 0, 0.62 + h, 0, g).scale.setScalar(r);
         mesh(bx(0.07, Math.min(1.6, h * 0.45), 0.05), glowMat(RUNE), 0, 0.62 + h * 0.5, R * 1.04, g, true);
-        const v = mesh(cyl(0.04, 0.05, h * 0.7, 4), lam(VINE), r * 0.75, 0.62 + h * 0.62, -r * 0.5, g, true);
-        v.rotation.z = 0.08;
-        mesh(sph(0.22, 6, 5), lam(VINE), r * 0.8, 0.62 + h * 0.3, -r * 0.55, g, true);
+        if (IVY_MAT) {
+            const a = Math.atan2(0.83, -0.55);
+            ivy(g, Math.sin(a) * (R + 0.02), 0.62 + h * (broken ? 0.95 : 1.0), Math.cos(a) * (R + 0.02), a, h * 0.75, R * 1.3, Math.round(x * 13 + z * 7));
+        }
+        else {
+            const v = mesh(cyl(0.04, 0.05, h * 0.7, 4), lam(VINE), r * 0.75, 0.62 + h * 0.62, -r * 0.5, g, true);
+            v.rotation.z = 0.08;
+            mesh(sph(0.22, 6, 5), lam(VINE), r * 0.8, 0.62 + h * 0.3, -r * 0.55, g, true);
+        }
         if (collide)
             addCircle(x, z, r * 1.25);
         return g;
@@ -2067,8 +2126,13 @@ function arch(x, z, rot, glow) {
     const g = grpAt(x, groundAt(x, z), z, rot);
     if (MASONRY) {
         mesh(MASONRY.arch, PIECE_MAT, 0, 0, 0, g);
-        for (const vx of [-1.3, 0.4, 1.6])
-            mesh(cyl(0.035, 0.035, 1.2 + (vx + 2) * 0.4, 4), lam(VINE), vx, 6.9 - Math.abs(vx) * 0.6 - (1.2 + (vx + 2) * 0.4) / 2, 0.62, g, true);
+        /* ivy over the extrados: two falls on the face, one behind */
+        if (IVY_MAT)
+            for (const [vx, side, len, wid] of [[-1.55, 1, 2.6, 0.9], [1.25, 1, 1.7, 0.7], [0.7, -1, 2.2, 0.9]])
+                ivy(g, vx, 5.49 + Math.sqrt(2.72 * 2.72 - vx * vx) + 0.05, side * 0.6, side > 0 ? 0 : Math.PI, len, wid, Math.round(x * 3 + z * 5 + vx * 10));
+        else
+            for (const vx of [-1.3, 0.4, 1.6])
+                mesh(cyl(0.035, 0.035, 1.2 + (vx + 2) * 0.4, 4), lam(VINE), vx, 6.9 - Math.abs(vx) * 0.6 - (1.2 + (vx + 2) * 0.4) / 2, 0.62, g, true);
         if (glow) {
             mesh(bx(0.5, 0.5, 0.1), glowMat(RUNE), 0, 7.75, 0.68, g, true).rotation.z = 0.785;
             halo(g, 0, 7.75, 0.8, 2.4, RUNE, 0.35);
@@ -2746,7 +2810,12 @@ function wallBox(x0, x1, z0, z1, h = 7, collide = true) {
             const t = (i + 0.5) / n - 0.5;
             for (const s of [-1, 1]) {
                 const px = cx + (alongX ? t * w : s * (w / 2 + 0.05)), pz = cz + (alongX ? s * (d / 2 + 0.05) : t * d);
-                mesh(cyl(0.05, 0.05, 2.5 + (i % 3), 4), lam(VINE), px, 3 + h - 1.6 - (i % 3) * 0.5, pz, STATIC, true);
+                if (IVY_MAT && MASONRY) {
+                    if (i % 8 !== 0)
+                        ivy(STATIC, px, 3 + h - 0.08, pz, alongX ? (s > 0 ? 0 : Math.PI) : (s > 0 ? Math.PI / 2 : -Math.PI / 2), 3 + (i % 3), 1.2, i * 31 + (s > 0 ? 7 : 0) + Math.round(cx));
+                }
+                else
+                    mesh(cyl(0.05, 0.05, 2.5 + (i % 3), 4), lam(VINE), px, 3 + h - 1.6 - (i % 3) * 0.5, pz, STATIC, true);
                 if (i % 8 === 0)
                     mesh(alongX ? bx(1.2, h * 0.75, 0.7) : bx(0.7, h * 0.75, 1.2), lam(STONE_D), px, 3 + h * 0.37, pz, STATIC);
             }

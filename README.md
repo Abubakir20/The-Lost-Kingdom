@@ -47,6 +47,7 @@ src/
   tex/ art/       painted textures and key art
   hero3d/         hero mesh (packed binary) and texture
   ui/             item icon atlas (4x4, transparent) and NPC portrait atlas (3x2)
+  props/          rocks and column pieces sculpted in Blender, one binary pack (format in src/world.ts)
 tools/
   test.js         automated playthrough, 71 checks
   shot.js         screenshot helper
@@ -68,4 +69,4 @@ Type checking: full `strict` mode is on and the project compiles with no errors.
 
 ## Credits
 
-Game design and code are original. Textures, key art, item icons, NPC portraits and the hero model were generated with Higgsfield (GPT Image 2.6 and Tripo H3.1). The icons and portraits were each generated as one sheet and cut into atlases (Higgsfield jobs ee72c4d4 and 1b9d191c). three.js is loaded from cdnjs; fonts from Google Fonts.
+Game design and code are original. Textures, key art, item icons, NPC portraits and the hero model were generated with Higgsfield (GPT Image 2.6 and Tripo H3.1). The icons and portraits were each generated as one sheet and cut into atlases (Higgsfield jobs ee72c4d4 and 1b9d191c). Rocks and column pieces were modelled procedurally in Blender (Higgsfield 3D Jutsu, project 7cec6fe3, revision 8) with per-vertex occlusion and moss baked by ray casting. three.js is loaded from cdnjs; fonts from Google Fonts.

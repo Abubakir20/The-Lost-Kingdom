@@ -7,6 +7,7 @@ interface Window {
   TLK_ART?: Record<string, string>;
   TLK_HERO?: { mesh: string; tex: string };
   TLK_UI?: { icons?: string; portraits?: string };
+  TLK_PROPS?: string;
   TLK: any;
   webkitAudioContext?: typeof AudioContext;
 }

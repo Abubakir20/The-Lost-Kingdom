@@ -7,8 +7,31 @@ for (const c of [STONE, STONE_D, 0x8e918b, 0x777b76, 0x9a9d97, 0xb9bfb3, 0xa4ada
 painted(lam(PLASTER), 'plaster', 0.3, 0.85);
 for (const c of [TIMBER, 0x7a4a2a, 0x8a5a30, 0xa8743c, 0x9a6a3c, 0xb07c44, 0x8a6a44, 0x5a3d28, 0x6b4a30, 0x5f432c, 0xb88a54]) painted(lam(c), 'wood', 0.55, 0.7);
 
+/* column pieces sculpted in Blender, in units of the column's radius: a stepped plinth, two fluted drums, a capital,
+   a broken drum and a fallen one. A column of any height is stacked from them. */
+const PIECE_MAT = painted(new T.MeshToonMaterial({ color: STONE, gradientMap: TOON, vertexColors: true }), 'stone', 0.5, 0.95);
+const PIECES = PROPS.P_PLINTH ? {
+  plinth: propGeo('P_PLINTH', STONE, 40) as THREE.BufferGeometry, cap: propGeo('P_CAPITAL', STONE, 40) as THREE.BufferGeometry,
+  drums: [propGeo('P_DRUM_A', STONE, 32) as THREE.BufferGeometry, propGeo('P_DRUM_B', STONE, 32) as THREE.BufferGeometry],
+  broken: propGeo('P_BROKEN', STONE, 32) as THREE.BufferGeometry, fallen: propGeo('P_FALLEN', STONE, 32) as THREE.BufferGeometry,
+} : null;
 function pillar(x: number, z: number, h: number, r = 0.6, collide = true, broken?: boolean) {
   const g = grpAt(x, groundAt(x, z), z, rng() * 6.283);
+  if (PIECES) {
+    const R = r * 0.86, n = Math.max(1, Math.round(h / (R * 2.3))), dh = h / n;
+    mesh(PIECES.plinth, PIECE_MAT, 0, 0, 0, g).scale.set(r, 1, r);
+    for (let k = 0; k < n; k++) {
+      const top = k === n - 1 && broken, d = mesh(top ? PIECES.broken : PIECES.drums[(k + Math.round(x)) & 1], PIECE_MAT, 0, 0.62 + k * dh, 0, g);
+      d.scale.set(R, dh, R); d.rotation.y = (k * 1.7 + x * 0.37 + z * 0.23) % 6.283;   // turned so the wear never lines up
+    }
+    if (broken) { const f = mesh(PIECES.fallen, PIECE_MAT, r * 2.4, 0, r, g); f.scale.setScalar(R); f.rotation.y = 0.6 + (x * 0.11) % 1; }
+    else mesh(PIECES.cap, PIECE_MAT, 0, 0.62 + h, 0, g).scale.setScalar(r);
+    mesh(bx(0.07, Math.min(1.6, h * 0.45), 0.05), glowMat(RUNE), 0, 0.62 + h * 0.5, R * 1.04, g, true);
+    const v = mesh(cyl(0.04, 0.05, h * 0.7, 4), lam(VINE), r * 0.75, 0.62 + h * 0.62, -r * 0.5, g, true); v.rotation.z = 0.08;
+    mesh(sph(0.22, 6, 5), lam(VINE), r * 0.8, 0.62 + h * 0.3, -r * 0.55, g, true);
+    if (collide) addCircle(x, z, r * 1.25);
+    return g;
+  }
   mesh(bx(r * 3.1, 0.3, r * 3.1), lam(STONE_D), 0, 0.15, 0, g); mesh(bx(r * 2.5, 0.32, r * 2.5), lam(STONE), 0, 0.46, 0, g);
   mesh(cyl(r * 0.84, r, h, 10), lam(STONE), 0, 0.62 + h / 2, 0, g);
   for (let k = 1; k <= 2; k++) if (h > 2.4) mesh(cyl(r * 1.0, r * 1.02, 0.14, 10), lam(STONE_D), 0, 0.62 + h * 0.33 * k, 0, g);

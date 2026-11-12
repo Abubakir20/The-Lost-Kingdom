@@ -343,6 +343,67 @@ const mapCanvas = (() => {
 
 /* ---------- chunked instancing: every cell is frustum- and distance-culled ---------- */
 const chunkSets: { meshes: any[]; dist: number; grass: boolean; total: number; }[] = [];
+/* ---------- sculpted props made in Blender: rocks and column pieces ----------
+   Pack layout (little endian): 'TLKP', u16 count, then per mesh: u8 name length, name, u32 vertices, u32 triangles,
+   f32 min[3], f32 max[3], u16 position[v*3] quantised to the box, u8 occlusion[v], u8 moss[v], u16 index[t*3].
+   Positions are Blender's (z up); occlusion and moss were baked per vertex by casting rays. Normals are rebuilt here
+   with a crease angle so cleaved faces stay crisp and curved ones smooth. */
+const PROPS: Record<string, { pos: Float32Array; ao: Uint8Array; moss: Uint8Array; idx: Uint16Array }> = (() => {
+  const out: Record<string, { pos: Float32Array; ao: Uint8Array; moss: Uint8Array; idx: Uint16Array }> = {}, src = window.TLK_PROPS;
+  if (!src) return out;
+  try {
+    const bin = atob(src), b = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i);
+    const dv = new DataView(b.buffer); if (String.fromCharCode(b[0], b[1], b[2], b[3]) !== 'TLKP') return out;
+    let o = 6; const n = dv.getUint16(4, true);
+    for (let k = 0; k < n; k++) {
+      const L = b[o]; let name = ''; for (let i = 0; i < L; i++) name += String.fromCharCode(b[o + 1 + i]); o += 1 + L;
+      const nv = dv.getUint32(o, true), nt = dv.getUint32(o + 4, true); o += 8;
+      const mn = [0, 1, 2].map(i => dv.getFloat32(o + i * 4, true)), mx = [0, 1, 2].map(i => dv.getFloat32(o + 12 + i * 4, true)); o += 24;
+      const pos = new Float32Array(nv * 3);
+      for (let i = 0; i < nv; i++) {
+        const q = (c: number) => mn[c] + dv.getUint16(o + (i * 3 + c) * 2, true) / 65535 * (mx[c] - mn[c]);
+        pos[i * 3] = q(0); pos[i * 3 + 1] = q(2); pos[i * 3 + 2] = -q(1);   // z up -> y up
+      }
+      o += nv * 6; const ao = b.slice(o, o + nv); o += nv; const moss = b.slice(o, o + nv); o += nv;
+      const idx = new Uint16Array(nt * 3); for (let i = 0; i < nt * 3; i++) idx[i] = dv.getUint16(o + i * 2, true); o += nt * 6;
+      out[name] = { pos, ao, moss, idx };
+    }
+  } catch (e) { console.warn('props unavailable', e); }
+  return out;
+})();
+/* geometry for one prop: crease-angle normals, and a vertex tint of occlusion and moss relative to the material's own colour */
+function propGeo(name: string, base: number, crease = 35, mossAmt = 1): THREE.BufferGeometry | null {
+  const P = PROPS[name]; if (!P) return null;
+  const tri = P.idx, N = tri.length, nf = N / 3, pos = new Float32Array(N * 3), nor = new Float32Array(N * 3), col = new Float32Array(N * 3);
+  const fn = new Float32Array(nf * 3), fa = new Float32Array(nf), vf: number[][] = [];
+  const a = new T.Vector3(), b2 = new T.Vector3(), c = new T.Vector3(), e1 = new T.Vector3(), e2 = new T.Vector3();
+  for (let t = 0; t < nf; t++) {
+    a.fromArray(P.pos, tri[t * 3] * 3); b2.fromArray(P.pos, tri[t * 3 + 1] * 3); c.fromArray(P.pos, tri[t * 3 + 2] * 3);
+    e1.subVectors(b2, a); e2.subVectors(c, a); e1.cross(e2); fa[t] = e1.length(); e1.normalize(); fn[t * 3] = e1.x; fn[t * 3 + 1] = e1.y; fn[t * 3 + 2] = e1.z;
+    for (let k = 0; k < 3; k++) (vf[tri[t * 3 + k]] = vf[tri[t * 3 + k]] || []).push(t);
+  }
+  const cosT = Math.cos(crease * Math.PI / 180), bc = new T.Color(base), mossC = new T.Color(MOSS), tint = new T.Color(), n = new T.Vector3();
+  const rel = new T.Color(mossC.r / Math.max(0.05, bc.r), mossC.g / Math.max(0.05, bc.g), mossC.b / Math.max(0.05, bc.b));
+  for (let t = 0; t < nf; t++) for (let k = 0; k < 3; k++) {
+    const vi = tri[t * 3 + k], o = (t * 3 + k) * 3;
+    pos[o] = P.pos[vi * 3]; pos[o + 1] = P.pos[vi * 3 + 1]; pos[o + 2] = P.pos[vi * 3 + 2];
+    n.set(0, 0, 0);
+    for (const f of vf[vi]) if (fn[f * 3] * fn[t * 3] + fn[f * 3 + 1] * fn[t * 3 + 1] + fn[f * 3 + 2] * fn[t * 3 + 2] > cosT) { n.x += fn[f * 3] * fa[f]; n.y += fn[f * 3 + 1] * fa[f]; n.z += fn[f * 3 + 2] * fa[f]; }
+    n.normalize(); nor[o] = n.x; nor[o + 1] = n.y; nor[o + 2] = n.z;
+    const ao = P.ao[vi] / 255, ms = P.moss[vi] / 255 * mossAmt;
+    tint.setRGB(1, 1, 1).lerp(rel, ms).multiplyScalar(0.34 + 0.66 * ao); col[o] = tint.r; col[o + 1] = tint.g; col[o + 2] = tint.b;
+  }
+  const g = new T.BufferGeometry(); g.setAttribute('position', new T.BufferAttribute(pos, 3)); g.setAttribute('normal', new T.BufferAttribute(nor, 3)); g.setAttribute('color', new T.BufferAttribute(col, 3));
+  g.computeBoundingBox(); g.computeBoundingSphere(); return g;
+}
+/* rocks: centred, one unit across at the widest, sitting with their base 0.3 below the origin; top is the height to stand on */
+const ROCK_COLOR = 0x8f958f;
+const ROCK_SHAPES = (['ROCK_BOULDER', 'ROCK_SLAB', 'ROCK_SPIRE'] as const).map(nm => {
+  const g = propGeo(nm, ROCK_COLOR, 38, 0.5); if (!g) return null;
+  const bb = g.boundingBox as THREE.Box3, s = 1 / Math.max(bb.max.x - bb.min.x, bb.max.z - bb.min.z) * 2;
+  g.translate(-(bb.min.x + bb.max.x) / 2, -bb.min.y, -(bb.min.z + bb.max.z) / 2); g.scale(s, s, s); g.translate(0, -0.3, 0); g.computeBoundingBox();
+  return { g, top: (g.boundingBox as THREE.Box3).max.y };
+});
 function chunked(geo: THREE.BufferGeometry, mat: THREE.Material, items: ChunkItem[], cell: number, o: ChunkOptions = {}) {
   const buckets = new Map(), dummy = new T.Object3D(), col = new T.Color();
   for (const it of items) { const k = Math.floor((it.x + WORLD) / cell) + ',' + Math.floor((it.z + WORLD) / cell); if (!buckets.has(k)) buckets.set(k, []); buckets.get(k).push(it); }
@@ -453,13 +514,22 @@ function buildVegetation() {
     puffs.push({ leaf: 1, x, y: h + s * 0.35, z, ry: rng() * 6, sx: s * 1.2, sy: s * 0.72, sz: s * 1.1, c: west ? hsl(0.36 + rng() * 0.06, 0.48, 0.28) : hsl(0.28 + rng() * 0.06, 0.5, 0.34) });
   }
   /* rocks, with moss caps on the big ones */
-  const rocks = [];
+  const rocks: (ChunkItem & { shape: number })[] = [];
   for (let i = 0; i < 1400 && rocks.length < 230; i++) {
     const x = (rng() * 2 - 1) * 197, z = (rng() * 2 - 1) * 197, h = terrainH(x, z);
     if (Math.hypot(x, z) > 198 || h < -0.9 || plantBlocked(x, z, 1)) continue;
     const s = 0.4 + rng() * rng() * 2.8, v = 0.9 + rng() * 0.25;
-    rocks.push({ x, y: h + s * 0.15, z, rx: rng() * 0.5, ry: rng() * 6, rz: rng() * 0.5, sx: s * (0.9 + rng() * 0.5), sy: s * (0.6 + rng() * 0.45), sz: s, c: [v, v * 1.01, v * 1.0] });
-    if (s > 1) { addCircle(x, z, s * 0.85, h + s * 0.15 + rocks[rocks.length - 1].sy * 0.78); puffs.push({ x, y: h + s * 0.62, z, ry: rng() * 6, sx: s * 0.75, sy: s * 0.22, sz: s * 0.7, c: hsl(0.25, 0.5, 0.38) }); }
+    const r = { x, y: h + s * 0.15, z, rx: rng() * 0.5, ry: rng() * 6, rz: rng() * 0.5, sx: s * (0.9 + rng() * 0.5), sy: s * (0.6 + rng() * 0.45), sz: s, c: [v, v * 1.01, v * 1.0], shape: 0 };
+    const hsh = Math.abs(Math.sin(x * 12.9898 + z * 78.233) * 43758.5453) % 1;
+    if (ROCK_SHAPES[0]) { r.shape = s > 1.3 && hsh < 0.22 ? 2 : hsh < 0.6 ? 0 : 1; r.rx *= 0.3; r.rz *= 0.3; if (r.shape === 2) r.sy *= 0.6; }
+    rocks.push(r);
+    const shp = ROCK_SHAPES[r.shape], topK = shp ? shp.top * 0.92 : 0.78;
+    if (s > 1) {
+      addCircle(x, z, s * 0.85, h + s * 0.15 + r.sy * topK);
+      // the old rocks wore a separate moss cap; sculpted ones carry their moss. The draw from the shared sequence stays, so nothing else in the world moves.
+      const capRy = rng() * 6;
+      if (!shp) puffs.push({ x, y: h + s * 0.62, z, ry: capRy, sx: s * 0.75, sy: s * 0.22, sz: s * 0.7, c: hsl(0.25, 0.5, 0.38) });
+    }
   }
   const trunkG = (() => { const g = new T.CylinderGeometry(0.17, 0.34, 1, 7, 4); g.translate(0, 0.5, 0); const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const y = p.getY(i), fl = 1 + smooth(0.25, 0, y) * 0.55; p.setX(i, p.getX(i) * fl + Math.sin(y * 2.6) * 0.07); p.setZ(i, p.getZ(i) * fl + Math.cos(y * 2.1) * 0.05); } g.computeVertexNormals(); return g; })();
   const coneG = (() => { const g = new T.ConeGeometry(1, 1, 10, 2); g.translate(0, 0.5, 0); const p = g.attributes.position, c = new Float32Array(p.count * 3); for (let i = 0; i < p.count; i++) { const y = p.getY(i), a = Math.atan2(p.getZ(i), p.getX(i)); if (y < 0.05) { const j = (Math.round(a / 0.628) % 2 === 0) ? 1.12 : 0.9; p.setX(i, p.getX(i) * j); p.setZ(i, p.getZ(i) * j); p.setY(i, y - (j > 1 ? 0.14 : 0)); } const k = smooth(0, 1, y); c[i * 3] = lerp(0.62, 1.2, k); c[i * 3 + 1] = lerp(0.68, 1.18, k); c[i * 3 + 2] = lerp(0.78, 1.05, k); } g.setAttribute('color', new T.BufferAttribute(c, 3)); g.computeVertexNormals(); return g; })();
@@ -483,7 +553,9 @@ function buildVegetation() {
   }
   chunked(puffGeo(1, 0.16), windify(leafMat(), 0.045), puffs, 88, { shadow: true, extent: 10 });
   chunked(coneG, windify(leafMat(), 0.03), cones, 88, { shadow: true, extent: 10 });
-  chunked(puffGeo(1, 0.26, true), painted(new T.MeshToonMaterial({ color: 0x8f958f, gradientMap: TOON, vertexColors: true }), 'cliff', 0.35, 0.85), rocks, 88, { shadow: true, extent: 5 });
+  const rockMat = painted(new T.MeshToonMaterial({ color: ROCK_COLOR, gradientMap: TOON, vertexColors: true }), 'cliff', 0.35, 0.85);
+  if (ROCK_SHAPES[0]) ROCK_SHAPES.forEach((sh, k) => { if (sh) chunked(sh.g, rockMat, rocks.filter(r => r.shape === k), 88, { shadow: true, extent: 6 }); });
+  else chunked(puffGeo(1, 0.26, true), rockMat, rocks, 88, { shadow: true, extent: 5 });
 
   /* giant trees of the Forgotten Forest edge */
   GIANTS.forEach(([x, z], gi) => {

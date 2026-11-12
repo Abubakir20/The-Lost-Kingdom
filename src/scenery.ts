@@ -227,10 +227,18 @@ const spirit = new T.Group();
     for (let i = -2; i <= 2; i++) { mesh(bx(0.7, 1.35, 0.7), lam(STONE_D), i * 7, BRIDGE.y + 0.6, s * (W - 0.22), g); mesh(bx(0.85, 0.16, 0.85), lam(STONE), i * 7, BRIDGE.y + 1.32, s * (W - 0.22), g); }
     mesh(bx(H * 2 - 2, 0.1, 0.5), lam(MOSS), 1, BRIDGE.y + 0.75, s * (W - 0.22), g, true).scale.x = 0.3;
   }
-  for (const px of [-7, 0, 7]) { mesh(bx(2.2, 5.4, W * 2 - 0.5), lam(STONE_D), px, BRIDGE.y - 3.1, 0, g); mesh(bx(2.8, 0.5, W * 2 + 0.3), lam(STONE), px, BRIDGE.y - 0.65, 0, g);
-    /* the piers stop a swimmer; on the deck above they are ignored */
-    addBox(BRIDGE.x + px - 1.4, BRIDGE.x + px + 1.4, BRIDGE.z - W - 0.15, BRIDGE.z + W + 0.15, BRIDGE_SOFFIT); }
-  for (const px of [-3.5, 3.5]) { const a = mesh(new T.CylinderGeometry(2.4, 2.4, W * 2 - 0.6, 12, 1, true, 0, Math.PI), lam(STONE_D, { side: T.DoubleSide }), px, BRIDGE.y - 1.9, 0, g); a.rotation.set(Math.PI / 2, Math.PI / 2, 0); }
+  /* underneath, sculpted in Blender: coursed piers with pointed cutwaters, and a stone barrel vault over each bay
+     with a proud voussoir ring and coursed spandrels up to the deck (both pieces hang from the deck's underside) */
+  const span = propGeo('BR_SPAN', STONE, 35, 0.8), pierG = propGeo('BR_PIER', STONE, 35, 0.8);
+  if (span && pierG) {
+    for (const px of [-7, 0, 7]) mesh(pierG, PIECE_MAT, px, BRIDGE.y - 0.5, 0, g);
+    for (const px of [-10.5, -3.5, 3.5, 10.5]) mesh(span, PIECE_MAT, px, BRIDGE.y - 0.5, 0, g);
+  } else {
+    for (const px of [-7, 0, 7]) { mesh(bx(2.2, 5.4, W * 2 - 0.5), lam(STONE_D), px, BRIDGE.y - 3.1, 0, g); mesh(bx(2.8, 0.5, W * 2 + 0.3), lam(STONE), px, BRIDGE.y - 0.65, 0, g); }
+    for (const px of [-3.5, 3.5]) { const a = mesh(new T.CylinderGeometry(2.4, 2.4, W * 2 - 0.6, 12, 1, true, 0, Math.PI), lam(STONE_D, { side: T.DoubleSide }), px, BRIDGE.y - 1.9, 0, g); a.rotation.set(Math.PI / 2, Math.PI / 2, 0); }
+  }
+  /* the piers stop a swimmer (out to where the vault gets too low for a head); on the deck above they are ignored */
+  for (const px of [-7, 0, 7]) addBox(BRIDGE.x + px - 1.85, BRIDGE.x + px + 1.85, BRIDGE.z - W - 1.2, BRIDGE.z + W + 1.2, BRIDGE_SOFFIT);
   arch(BRIDGE.x + 17.5, BRIDGE.z, Math.PI / 2, true);
   lampPost(BRIDGE.x + 16, BRIDGE.z + 4); lampPost(BRIDGE.x - 16.5, BRIDGE.z - 4); signpost(BRIDGE.x - 18, BRIDGE.z + 4.5, 2.1);
 }

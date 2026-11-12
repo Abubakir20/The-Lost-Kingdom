@@ -226,7 +226,7 @@ function frame(now: number) {
       G.time = (G.time + dt / 720) % 1; G.playTime += raw;
       updatePlayer(dt);
       for (const e of enemies) if (e.def.boss) updateBoss(e, dt); else updateEnemy(e, dt);
-      updateProjs(dt); updateHazards(dt); updateDrops(dt); updateNPCs(dt); updateTemple(dt); updateDiscovery(dt); updateWeather(raw, PL.pos);
+      updateProjs(dt); updateHitFeedback(dt, raw); updateHazards(dt); updateDrops(dt); updateNPCs(dt); updateTemple(dt); updateDiscovery(dt); updateWeather(raw, PL.pos);
       interT -= dt; if (interT <= 0) { interT = 0.12; findInteract(); }
       saveT -= raw; if (saveT <= 0) { saveT = 60; if (!PL.dead && !cine) autosave(); }
     }

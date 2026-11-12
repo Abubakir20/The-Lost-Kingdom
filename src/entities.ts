@@ -239,7 +239,7 @@ function addRing(x: number, y: number, z: number, color: number, maxR: number, d
 function updateRings(dt: number) { for (const r of rings) { if (!r.live) continue; r.t += dt; const k = r.t / r.dur; if (k >= 1) { r.live = false; r.m.visible = false; continue; } const s = 0.3 + r.maxR * (1 - (1 - k) * (1 - k)); r.m.scale.set(s, 1, s); r.m.material.opacity = (1 - k) * 0.8; } }
 
 function camForward(out: THREE.Vector3) { out.set(-Math.sin(CAM.yaw), 0, -Math.cos(CAM.yaw)); return out; }
-const _v1 = new T.Vector3(), _v2 = new T.Vector3(), _v3 = new T.Vector3();
+const _v1 = new T.Vector3(), _v2 = new T.Vector3(), _v3 = new T.Vector3(), _v4 = new T.Vector3(), _v5 = new T.Vector3();
 function useStamina(n: number) { G.p.st = Math.max(0, G.p.st - n); PL.stDelay = 0.7; }
 function faceAim() {
   if (PL.lock) PL.yaw = Math.atan2(PL.lock.pos.x - PL.pos.x, PL.lock.pos.z - PL.pos.z);
@@ -280,6 +280,8 @@ function swordHit(heavy: any, combo: number) {
     if (d > 1.2 + e.def.radius && a > arc) continue;
     const crit = Math.random() < (combo === 2 ? 0.25 : 0.12), kx = heavy ? dx / (d || 1) : fx, kz = heavy ? dz / (d || 1) : fz;
     damageEnemy(e, swordDmg() * (heavy ? 2.4 : combo === 2 ? 1.5 : 1) * (crit ? 1.8 : 1) * rand(0.92, 1.08), { crit, kx, kz, kb: heavy ? 10 : combo === 2 ? 8 : 3.5 });
+    const nr = e.def.radius * 0.75 / (d || 1);
+    impactStar(e.pos.x + dx * -nr, e.pos.y + e.def.height * 0.58, e.pos.z + dz * -nr, crit ? 0xffd36a : 0xfff4dc, (crit ? 2.6 : heavy || combo === 2 ? 2.1 : 1.6) * Math.max(1, e.def.scale * 0.8));
     any = true;
   }
   if (any) { sfx(heavy || combo === 2 ? 'hitBig' : 'hit'); CAM.shake = heavy ? 0.4 : combo === 2 ? 0.28 : 0.14; hitStop = heavy ? 0.12 : combo === 2 ? 0.09 : 0.055; }
@@ -323,11 +325,18 @@ function toggleLock() {
   for (const e of enemies) { if (!e.alive || (e.def.boss && e.state === 'sleep')) continue; const d = Math.hypot(e.pos.x - PL.pos.x, e.pos.z - PL.pos.z); if (d < bd) { bd = d; best = e; } }
   PL.lock = best; if (!best) notify('No enemy in sight.'); else sfx('ui');
 }
+/* a blocked blow: the shield flashes and the hit pushes the hero back a step */
+function blockFeedback(sx: number, sz: number) {
+  const fx = Math.sin(PL.yaw), fz = Math.cos(PL.yaw);
+  impactStar(PL.pos.x + fx * 0.55, PL.pos.y + 1.15, PL.pos.z + fz * 0.55, 0xbff4ff, 2.0);
+  const ax = PL.pos.x - sx, az = PL.pos.z - sz, ad = Math.hypot(ax, az) || 1;
+  PL.vel.x += ax / ad * 4.5; PL.vel.z += az / ad * 4.5; CAM.shake = Math.max(CAM.shake, 0.18);
+}
 function hurtPlayer(dmg: number, sx: number, sz: number, opts?: { unblockable?: boolean }) {
   if (PL.iframes > 0 || PL.dead || MODE !== 'play' || cine) return false;
   if (PL.blocking && !(opts && opts.unblockable)) {
     const a = Math.abs(Math.atan2(sx - PL.pos.x, sz - PL.pos.z) - PL.yaw), ang = Math.min(a, Math.PI * 2 - a);
-    if (ang < 1.3) { useStamina(dmg * 0.9); sfx('block'); burst(PL.pos.x + Math.sin(PL.yaw) * 0.6, PL.pos.y + 1.2, PL.pos.z + Math.cos(PL.yaw) * 0.6, 0xffe9a8, 9, 4, 0.3); dmg *= G.p.st > 0 ? 0.12 : 0.6; PL.iframes = 0.2; hitStop = 0.05; }
+    if (ang < 1.3) { useStamina(dmg * 0.9); sfx('block'); blockFeedback(sx, sz); burst(PL.pos.x + Math.sin(PL.yaw) * 0.6, PL.pos.y + 1.2, PL.pos.z + Math.cos(PL.yaw) * 0.6, 0xffe9a8, 9, 4, 0.3); dmg *= G.p.st > 0 ? 0.12 : 0.6; PL.iframes = 0.2; hitStop = 0.05; }
   }
   dmg = Math.max(1, Math.round(dmg - G.p.armor));
   G.p.hp -= dmg; PL.hurtT = 0.35; PL.iframes = Math.max(PL.iframes, 0.45); CAM.shake = 0.4; sfx('hurt');
@@ -624,6 +633,53 @@ function spawnProj(type: string, pos: THREE.Vector3, dir: THREE.Vector3, speed: 
   return pr;
 }
 function killProj(pr: Projectile, fx?: boolean) { pr.live = false; pr.m.visible = false; if (fx) { burst(pr.pos.x, pr.pos.y, pr.pos.z, pr.type === 'fire' ? 0xff8a3c : pr.type === 'spore' ? 0xc77bff : 0xe8dcc0, pr.type === 'arrow' ? 4 : 16, pr.type === 'arrow' ? 3 : 5, 0.45); if (pr.type === 'fire') addRing(pr.pos.x, pr.pos.y, pr.pos.z, 0xff9a4a, 1.8, 0.3); } }
+/* ---------- hit feedback: impact stars and arrows that stay where they land ---------- */
+const STAR_TEX = (() => {
+  const c = makeCanvas(64, 64), x = ctx2d(c), g = x.createRadialGradient(32, 32, 0, 32, 32, 30);
+  g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.18, 'rgba(255,255,255,.75)'); g.addColorStop(0.5, 'rgba(255,255,255,.12)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+  x.fillStyle = g; x.fillRect(0, 0, 64, 64);
+  x.fillStyle = 'rgba(255,255,255,.95)';
+  for (const r of [0, Math.PI / 2]) { x.save(); x.translate(32, 32); x.rotate(r); x.beginPath(); x.moveTo(-31, 0); x.quadraticCurveTo(0, -3.2, 31, 0); x.quadraticCurveTo(0, 3.2, -31, 0); x.fill(); x.restore(); }
+  const t = new T.CanvasTexture(c); return t;
+})();
+const STARS: { s: THREE.Sprite; t: number; life: number; size: number }[] = [];
+/* a short bright flash where a blow lands */
+function impactStar(x: number, y: number, z: number, color: number, size: number) {
+  let st = STARS.find(q => q.t >= q.life);
+  if (!st) {
+    if (STARS.length >= 12) st = STARS.reduce((a, b) => (a.t > b.t ? a : b));
+    else { const s = new T.Sprite(new T.SpriteMaterial({ map: STAR_TEX, transparent: true, blending: T.AdditiveBlending, depthWrite: false, depthTest: false })); s.renderOrder = 5; scene.add(s); st = { s, t: 0, life: 0, size: 0 }; STARS.push(st); }
+  }
+  st.s.position.set(x, y, z); st.s.material.color.setHex(color); st.s.material.rotation = Math.random() * 0.8 - 0.4; st.t = 0; st.life = 0.16; st.size = size; st.s.visible = true;
+}
+const STUCK: { m: THREE.Object3D; owner: Enemy | null; t: number }[] = [];
+/* leave an arrow standing in whatever it hit; the tip sinks a little way in */
+function stickArrow(point: THREE.Vector3, vel: THREE.Vector3, owner: Enemy | null) {
+  let sa = STUCK.find(q => !q.m.visible);
+  if (!sa) {
+    if (STUCK.length >= 28) sa = STUCK.reduce((a, b) => (a.t > b.t ? a : b));
+    else {
+      const m = new T.Group(); mesh(PGEO.arrow, lam(0xe8dcc0), 0, 0, 0, m, true);
+      for (let k = 0; k < 2; k++) mesh(bx(0.14, 0.01, 0.2), lam(0xc8452f), 0, 0, -0.4, m, true).rotation.z = k * 1.571;
+      sa = { m, owner: null, t: 0 }; STUCK.push(sa);
+    }
+  }
+  if (owner) { const mine = STUCK.filter(q => q.owner === owner && q.m.visible); if (mine.length >= 6) mine.reduce((a, b) => (a.t > b.t ? a : b)).m.visible = false; }
+  _v4.copy(vel).normalize(); scene.add(sa.m); sa.m.position.copy(point).addScaledVector(_v4, -0.42); _v5.copy(sa.m.position).add(_v4); sa.m.lookAt(_v5);
+  sa.m.rotation.z += Math.random() * 6.28; sa.m.updateMatrixWorld();
+  if (owner) owner.g.attach(sa.m);
+  sa.owner = owner; sa.t = 0; sa.m.visible = true;
+}
+/* arrows in a creature that comes back to life are gone */
+function unstickFrom(e: Enemy) { for (const q of STUCK) if (q.owner === e) { q.m.visible = false; q.owner = null; scene.add(q.m); } }
+function updateHitFeedback(dt: number, raw: number) {
+  for (const st of STARS) {
+    if (st.t >= st.life) { st.s.visible = false; continue; }
+    st.t += Math.max(dt, raw * 0.35); const k = Math.min(1, st.t / st.life);
+    st.s.scale.setScalar(st.size * (0.55 + 0.75 * Math.sqrt(k))); st.s.material.opacity = 1 - k * k;
+  }
+  for (const q of STUCK) if (q.m.visible && !q.owner) { q.t += dt; if (q.t > 12) q.m.visible = false; } else if (q.m.visible) q.t += dt;
+}
 function updateProjs(dt: number) {
   for (const pr of projs) {
     if (!pr.live) continue;
@@ -633,14 +689,24 @@ function updateProjs(dt: number) {
     pr.m.position.copy(pr.pos);
     if (pr.type === 'arrow') { _v1.copy(pr.pos).add(pr.vel); pr.m.lookAt(_v1); }
     else if (Math.random() < 0.7) burst(pr.pos.x, pr.pos.y, pr.pos.z, pr.type === 'fire' ? 0xffc04a : 0xa85cff, 1, 0.8, 0.35, -1);
-    if (pr.pos.y < groundAt(pr.pos.x, pr.pos.z) || (pr.pos.y < 10 && insideBox(pr.pos.x, pr.pos.z, 0))) { killProj(pr, true); continue; }
+    if (pr.pos.y < groundAt(pr.pos.x, pr.pos.z) || (pr.pos.y < 10 && insideBox(pr.pos.x, pr.pos.z, 0))) {
+      if (pr.type === 'arrow' && pr.pos.y > WATER_Y - 0.2) stickArrow(pr.pos, pr.vel, null);
+      killProj(pr, true); continue;
+    }
     if (pr.mine) {
       let done = false;
       for (const e of enemies) {
         if (!e.alive) continue; const cy = e.pos.y + e.def.height * 0.55;
         if (Math.abs(pr.pos.x - e.pos.x) < e.def.radius + 0.45 && Math.abs(pr.pos.z - e.pos.z) < e.def.radius + 0.45 && Math.abs(pr.pos.y - cy) < e.def.height * 0.6 + 0.3) {
           const crit = pr.type === 'arrow' && Math.random() < 0.18;
-          damageEnemy(e, pr.dmg * (crit ? 1.8 : 1), { crit, fire: pr.type === 'fire', kx: pr.vel.x * 0.03, kz: pr.vel.z * 0.03, kb: 3 }); sfx('hit'); killProj(pr, true); done = true; break;
+          damageEnemy(e, pr.dmg * (crit ? 1.8 : 1), { crit, fire: pr.type === 'fire', kx: pr.vel.x * 0.03, kz: pr.vel.z * 0.03, kb: 3 }); sfx('hit');
+          impactStar(pr.pos.x, pr.pos.y, pr.pos.z, pr.type === 'fire' ? 0xffb050 : crit ? 0xffd36a : 0xfff4dc, crit ? 2.2 : 1.4);
+          if (pr.type === 'arrow') {
+            // the arrow sinks in at the creature's surface, on the side it came from
+            const hx = pr.pos.x - e.pos.x, hz = pr.pos.z - e.pos.z, hd = Math.hypot(hx, hz) || 1, sr = e.def.radius * 0.8 * e.def.scale;
+            _v2.set(e.pos.x + hx / hd * sr, pr.pos.y, e.pos.z + hz / hd * sr); stickArrow(_v2, pr.vel, e);
+          }
+          killProj(pr, true); done = true; break;
         }
       }
       if (done) continue;
@@ -751,6 +817,7 @@ function spawnEnemy(type: string, x: number, z: number) {
   addOutline(e.g, def.boss ? 0.05 : 0.014); scene.add(e.g); enemies.push(e); return e;
 }
 function reviveEnemy(e: Enemy) {
+  unstickFrom(e);
   e.alive = true; e.hp = e.def.hp; e.state = e.def.boss ? 'sleep' : 'idle'; e.t = 0; e.aggro = false; e.deadT = 0; e.flash = 0; e.pos.set(e.home.x, groundAt(e.home.x, e.home.z), e.home.z);
   e.g.visible = true; e.g.rotation.set(0, e.yaw, 0); e.g.scale.setScalar(e.def.scale); e.g.position.copy(e.pos); e.kb.set(0, 0, 0); for (const m of e.mats) m.emissive.setRGB(0, 0, 0);
 }
@@ -764,7 +831,7 @@ function damageEnemy(e: Enemy, dmg: number, o: HitOptions) {
   if (e.hp <= 0) killEnemy(e);
 }
 function killEnemy(e: Enemy) {
-  e.alive = false; e.deadT = 0; e.hp = 0; if (PL.lock === e) PL.lock = null;
+  e.alive = false; e.deadT = 0; e.hp = 0; if (PL.lock === e) PL.lock = null; hitStop = Math.max(hitStop, 0.11);
   gainXp(e.def.xp); sfx('die');
   if (e.def.boss) { bossDefeated(e); return; }
   const items: Record<string, number> = {}; for (const [id, ch, n] of e.def.loot) if (Math.random() < ch) items[id] = 1 + (Math.random() * n | 0);
@@ -786,6 +853,10 @@ function updateEnemy(e: Enemy, dt: number) {
     e.deadT += dt;
     if (e.g.visible) {
       const k = Math.min(1, e.deadT / 0.45);
+      if (!D.boss && e.deadT < 0.6) {   /* carried by the killing blow, with a small hop */
+        if (e.kb.lengthSq() > 0.01) { e.pos.x += e.kb.x * dt * 1.4; e.pos.z += e.kb.z * dt * 1.4; e.kb.multiplyScalar(Math.max(0, 1 - 5 * dt)); resolveCollide(e.pos, D.radius); }
+        e.g.position.x = e.pos.x; e.g.position.z = e.pos.z; if (!D.fly) e.g.position.y = e.pos.y + 0.35 * Math.sin(Math.min(1, e.deadT / 0.4) * Math.PI);
+      }
       if (D.fly) { e.g.position.y -= dt * 4; e.g.rotation.z += dt * 6; } else { e.g.rotation.x = -k * 1.5; e.g.rotation.z = k * 0.3; }
       for (const m of e.mats) m.emissive.setRGB(Math.max(0, 0.6 - e.deadT * 2), Math.max(0, 0.6 - e.deadT * 2), Math.max(0, 0.6 - e.deadT * 2));
       if (e.deadT > 1.1) { e.g.scale.multiplyScalar(Math.max(0.01, 1 - dt * 6)); }

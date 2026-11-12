@@ -467,7 +467,7 @@ let grass: any, TREES: { x: number; z: number; h: number; type: string; s: numbe
 /* vegetation is planted after the buildings exist, so nothing grows through a wall */
 function buildVegetation() {
   /* --- trees --- */
-  const trunks = [], puffs = [], cones = [];
+  const trunks: (ChunkItem & { shape: number })[] = [], puffs = [], cones = [];
   for (let i = 0; i < 5200 && TREES.length < 820; i++) {
     const x = (rng() * 2 - 1) * 194, z = (rng() * 2 - 1) * 194, d = Math.hypot(x, z); if (d > 192) continue;
     const h = terrainH(x, z); if (h < 0.3 || h > 46) continue;
@@ -485,12 +485,12 @@ function buildVegetation() {
   for (const t of TREES) {
     const s = t.s, ry = rng() * 6.283;
     if (t.type === 'pine') {
-      trunks.push({ x: t.x, y: t.h - 0.2, z: t.z, ry, sx: s * 0.95, sy: 2.2 * s, sz: s * 0.95, c: [0.42, 0.29, 0.2] });
+      trunks.push({ x: t.x, y: t.h - 0.2, z: t.z, ry, sx: s * 0.95, sy: 2.2 * s, sz: s * 0.95, c: [0.42, 0.29, 0.2], shape: 1 });
       const R = [2.1, 1.75, 1.35, 0.9], Y = [1.1, 2.5, 3.8, 5.0], hue = 0.39 + rng() * 0.05, li = 0.2 + rng() * 0.06;
       for (let k = 0; k < 4; k++) cones.push({ x: t.x, y: t.h + Y[k] * s, z: t.z, ry: ry + k * 0.7, sx: R[k] * s, sy: 2.5 * s, sz: R[k] * s, c: hsl(hue, 0.5, li + k * 0.035) });
     } else {
       const birch = t.type === 'birch', th = (birch ? 4.2 : 2.9) * s, tw = birch ? 0.55 : 1;
-      trunks.push({ x: t.x, y: t.h - 0.2, z: t.z, ry, sx: s * tw, sy: th, sz: s * tw, c: birch ? [0.92, 0.9, 0.84] : t.type === 'blossom' ? [0.36, 0.25, 0.22] : [0.46, 0.31, 0.2] });
+      trunks.push({ x: t.x, y: t.h - 0.2, z: t.z, ry, sx: s * tw, sy: th, sz: s * tw, c: birch ? [0.92, 0.9, 0.84] : t.type === 'blossom' ? [0.36, 0.25, 0.22] : [0.46, 0.31, 0.2], shape: birch || Math.abs(Math.sin(t.x * 12.9898 + t.z * 78.233) * 43758.5453) % 1 > 0.65 ? 1 : 0 });
       let hue, sat, li;
       if (t.type === 'blossom') { hue = 0.93 + rng() * 0.04; sat = 0.72; li = 0.76; }
       else if (t.type === 'autumn') { hue = 0.04 + rng() * 0.07; sat = 0.78; li = 0.5; }
@@ -534,7 +534,12 @@ function buildVegetation() {
   const trunkG = (() => { const g = new T.CylinderGeometry(0.17, 0.34, 1, 7, 4); g.translate(0, 0.5, 0); const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const y = p.getY(i), fl = 1 + smooth(0.25, 0, y) * 0.55; p.setX(i, p.getX(i) * fl + Math.sin(y * 2.6) * 0.07); p.setZ(i, p.getZ(i) * fl + Math.cos(y * 2.1) * 0.05); } g.computeVertexNormals(); return g; })();
   const coneG = (() => { const g = new T.ConeGeometry(1, 1, 10, 2); g.translate(0, 0.5, 0); const p = g.attributes.position, c = new Float32Array(p.count * 3); for (let i = 0; i < p.count; i++) { const y = p.getY(i), a = Math.atan2(p.getZ(i), p.getX(i)); if (y < 0.05) { const j = (Math.round(a / 0.628) % 2 === 0) ? 1.12 : 0.9; p.setX(i, p.getX(i) * j); p.setZ(i, p.getZ(i) * j); p.setY(i, y - (j > 1 ? 0.14 : 0)); } const k = smooth(0, 1, y); c[i * 3] = lerp(0.62, 1.2, k); c[i * 3 + 1] = lerp(0.68, 1.18, k); c[i * 3 + 2] = lerp(0.78, 1.05, k); } g.setAttribute('color', new T.BufferAttribute(c, 3)); g.computeVertexNormals(); return g; })();
   const leafMat = () => new T.MeshLambertMaterial({ color: 0xffffff, vertexColors: true });
-  chunked(trunkG, painted(new T.MeshToonMaterial({ color: 0xffffff, gradientMap: TOON }), 'wood', 0.9, 0.75), trunks, 88, { shadow: true, extent: 8 });
+  /* trunks sculpted in Blender (flared roots, ridged bark, a lean; one with branch stubs into the crown), unit height like trunkG */
+  const TRUNK_SHAPES = (['TRUNK_A', 'TRUNK_B'] as const).map(nm => propGeo(nm, 0x75503a, 60, 0.6));
+  if (TRUNK_SHAPES[0] && TRUNK_SHAPES[1]) {
+    const barkMat = painted(new T.MeshToonMaterial({ color: 0xffffff, gradientMap: TOON, vertexColors: true }), 'wood', 0.9, 0.75);
+    TRUNK_SHAPES.forEach((g, k) => chunked(g as THREE.BufferGeometry, barkMat, trunks.filter(t => t.shape === k), 88, { shadow: true, extent: 8 }));
+  } else chunked(trunkG, painted(new T.MeshToonMaterial({ color: 0xffffff, gradientMap: TOON }), 'wood', 0.9, 0.75), trunks, 88, { shadow: true, extent: 8 });
   const leafSrc = (window.TLK_TEX || {}).leaves;
   if (leafSrc) {   // painted leaf cards around a darker core: soft, brushy canopies instead of faceted blobs
     const lr = mulberry(777), P = [], N = [], U = [], C = [];

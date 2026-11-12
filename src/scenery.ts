@@ -43,8 +43,18 @@ function pillar(x: number, z: number, h: number, r = 0.6, collide = true, broken
   if (collide) addCircle(x, z, r * 1.25);
   return g;
 }
+/* the arch, the wall course and its merlon, sculpted in Blender as dressed, coursed stone with baked occlusion and moss */
+const MASONRY = PROPS.ARCH ? { arch: propGeo('ARCH', STONE, 35, 0.8) as THREE.BufferGeometry, walls: [propGeo('W_SEG_A', STONE, 35, 0.7) as THREE.BufferGeometry, propGeo('W_SEG_B', STONE, 35, 0.7) as THREE.BufferGeometry], merlon: propGeo('W_MERLON', STONE, 35, 0.8) as THREE.BufferGeometry } : null;
 function arch(x: number, z: number, rot: number, glow: boolean) {
   const g = grpAt(x, groundAt(x, z), z, rot);
+  if (MASONRY) {
+    mesh(MASONRY.arch, PIECE_MAT, 0, 0, 0, g);
+    for (const vx of [-1.3, 0.4, 1.6]) mesh(cyl(0.035, 0.035, 1.2 + (vx + 2) * 0.4, 4), lam(VINE), vx, 6.9 - Math.abs(vx) * 0.6 - (1.2 + (vx + 2) * 0.4) / 2, 0.62, g, true);
+    if (glow) { mesh(bx(0.5, 0.5, 0.1), glowMat(RUNE), 0, 7.75, 0.68, g, true).rotation.z = 0.785; halo(g, 0, 7.75, 0.8, 2.4, RUNE, 0.35); }
+    const c = Math.cos(rot), s = Math.sin(rot);
+    addCircle(x + c * 2.2, z - s * 2.2, 0.8); addCircle(x - c * 2.2, z + s * 2.2, 0.8);
+    return;
+  }
   for (const s of [-1, 1]) { for (let k = 0; k < 5; k++) mesh(bx(1.1 - (k % 2) * 0.1, 1, 1.1 - (k % 2) * 0.1), lam(k % 2 ? STONE : STONE_D), s * 2.2, 0.5 + k, 0, g); mesh(bx(1.5, 0.3, 1.5), lam(STONE_D), s * 2.2, 0.15, 0, g); }
   for (let k = -3; k <= 3; k++) { const a = k * 0.33; const st = mesh(bx(0.95, 0.9, 1.15), lam(k % 2 ? STONE : STONE_D), Math.sin(a) * 2.5, 4.9 + Math.cos(a) * 1.35, 0, g); st.rotation.z = -a; }
   mesh(bx(6.4, 0.22, 1.3), lam(MOSS), 0, 6.72, 0, g).scale.x = 0.55;
@@ -330,10 +340,17 @@ const waterfall = (() => {
 /* ---------- Temple of Echoes ---------- */
 const gates: Record<string, any> = {}, temple: Record<string, any> = {};
 function wallBox(x0: number, x1: number, z0: number, z1: number, h = 7, collide = true) {
-  const w = Math.abs(x1 - x0), d = Math.abs(z1 - z0), cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, long = Math.max(w, d), alongX = w > d;
-  mesh(bx(w, h, d), lam(STONE), cx, 3 + h / 2, cz, STATIC); mesh(bx(w + 0.35, 0.8, d + 0.35), lam(STONE_D), cx, 3.4, cz, STATIC); mesh(bx(w + 0.3, 0.3, d + 0.3), lam(STONE_D), cx, 3 + h - 0.6, cz, STATIC);
+  const w = Math.abs(x1 - x0), d = Math.abs(z1 - z0), cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, long = Math.max(w, d), alongX = w > d, thick = Math.min(w, d);
+  if (MASONRY) {
+    /* coursed segments 4 m long (stretched a little to fit), every other one turned about so the joints never repeat */
+    const ns = Math.max(1, Math.round(long / 4)), sl = long / ns;
+    for (let i = 0; i < ns; i++) {
+      const t = (i + 0.5) / ns - 0.5, seg = mesh(MASONRY.walls[(i + Math.round(cx + cz)) & 1], PIECE_MAT, cx + (alongX ? t * w : 0), 3, cz + (alongX ? 0 : t * d), STATIC);
+      seg.rotation.y = (alongX ? 0 : Math.PI / 2) + (i % 3 === 1 ? Math.PI : 0); seg.scale.set(sl / 4, h / 7, thick / 1.2);
+    }
+  } else { mesh(bx(w, h, d), lam(STONE), cx, 3 + h / 2, cz, STATIC); mesh(bx(w + 0.35, 0.8, d + 0.35), lam(STONE_D), cx, 3.4, cz, STATIC); mesh(bx(w + 0.3, 0.3, d + 0.3), lam(STONE_D), cx, 3 + h - 0.6, cz, STATIC); }
   const n = Math.floor(long / 2.6);
-  for (let i = 0; i < n; i++) { const t = (i + 0.5) / n - 0.5; if (i % 2 === 0) mesh(alongX ? bx(1.3, 0.9, d + 0.1) : bx(w + 0.1, 0.9, 1.3), lam(STONE), cx + (alongX ? t * w : 0), 3 + h + 0.45, cz + (alongX ? 0 : t * d), STATIC); else if (i % 3 === 0) mesh(alongX ? bx(1.6, 0.2, d + 0.4) : bx(w + 0.4, 0.2, 1.6), lam(MOSS), cx + (alongX ? t * w : 0), 3 + h + 0.1, cz + (alongX ? 0 : t * d), STATIC, true); }
+  for (let i = 0; i < n; i++) { const t = (i + 0.5) / n - 0.5; if (i % 2 === 0) { if (MASONRY) { const m = mesh(MASONRY.merlon, PIECE_MAT, cx + (alongX ? t * w : 0), 3 + h - 0.02, cz + (alongX ? 0 : t * d), STATIC); m.rotation.y = alongX ? 0 : Math.PI / 2; m.scale.set(1, 1, (thick + 0.1) / 1.2); } else mesh(alongX ? bx(1.3, 0.9, d + 0.1) : bx(w + 0.1, 0.9, 1.3), lam(STONE), cx + (alongX ? t * w : 0), 3 + h + 0.45, cz + (alongX ? 0 : t * d), STATIC); } else if (i % 3 === 0) mesh(alongX ? bx(1.6, 0.2, d + 0.4) : bx(w + 0.4, 0.2, 1.6), lam(MOSS), cx + (alongX ? t * w : 0), 3 + h + 0.1, cz + (alongX ? 0 : t * d), STATIC, true); }
   if (long > 30) for (let i = 0; i < n; i += 4) { const t = (i + 0.5) / n - 0.5; for (const s of [-1, 1]) { const px = cx + (alongX ? t * w : s * (w / 2 + 0.05)), pz = cz + (alongX ? s * (d / 2 + 0.05) : t * d); mesh(cyl(0.05, 0.05, 2.5 + (i % 3), 4), lam(VINE), px, 3 + h - 1.6 - (i % 3) * 0.5, pz, STATIC, true); if (i % 8 === 0) mesh(alongX ? bx(1.2, h * 0.75, 0.7) : bx(0.7, h * 0.75, 1.2), lam(STONE_D), px, 3 + h * 0.37, pz, STATIC); } }
   if (collide) addBox(x0, x1, z0, z1);
 }

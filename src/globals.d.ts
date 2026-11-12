@@ -21,6 +21,8 @@ interface Rig {
   armL: THREE.Group; armR: THREE.Group; elbowL: THREE.Group; elbowR: THREE.Group; handL: THREE.Group; handR: THREE.Group;
   legL: THREE.Group; legR: THREE.Group; kneeL: THREE.Group; kneeR: THREE.Group;
   a: Pose | null; baseLean: number; zBias?: number;
+  /** the sculpted hero's finger joints, hinged at the knuckles (other humanoids have none) */
+  fingersL?: THREE.Group; fingersR?: THREE.Group;
 }
 interface Humanoid { g: THREE.Group; p: Rig }
 interface HumanoidLook {

@@ -140,7 +140,7 @@ const HERO3D = (() => {
     const idx = new Uint16Array(buf.buffer.slice(o, o + ni * 2));
     const SC = 1.9, pos = new Float32Array(nv * 3), nor = new Float32Array(nv * 3), uv = new Float32Array(nv * 2), si = new Uint16Array(nv * 4), sw = new Float32Array(nv * 4);
     const sm = (a: number, b: number, x: number) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
-    const W = new Float32Array(11);   // 0 hips 1 chest 2 head 3 armL 4 elbowL 5 armR 6 elbowR 7 legL 8 kneeL 9 legR 10 kneeR
+    const W = new Float32Array(13);   // 0 hips 1 chest 2 head 3 armL 4 elbowL 5 armR 6 elbowR 7 legL 8 kneeL 9 legR 10 kneeR 11 fingersL 12 fingersR
     for (let i = 0; i < nv; i++) {
       const mx = -q[i * 3 + 2] / 65534, my = q[i * 3 + 1] / 65534, mz = q[i * 3] / 65534;   // model faces +x; the game faces +z
       pos[i * 3] = mx * SC; pos[i * 3 + 1] = (my + 0.5) * SC; pos[i * 3 + 2] = mz * SC;
@@ -148,12 +148,13 @@ const HERO3D = (() => {
       uv[i * 2] = u16[i * 2] / 65535; uv[i * 2 + 1] = u16[i * 2 + 1] / 65535;
       W.fill(0); const ax = Math.abs(mx), L = mx >= 0;
       // arm: distance along and around the shoulder-to-wrist axis
-      let a = 0, e = 0;
+      let a = 0, e = 0, f = 0;
       if (my < 0.31 && ax > 0.06) {
         const vx = ax - 0.098, vy = my - 0.262, t = vx * 0.5288 - vy * 0.8488, r = Math.hypot(vx * 0.8488 + vy * 0.5288, mz);
         a = sm(-0.015, 0.05, t); if (t < 0.1) a *= 1 - sm(0.05, 0.08, r);
         if (my < 0.165) { const xb = 0.10 + (0.14 - my) * 0.5; a *= sm(xb - 0.015, xb + 0.01, ax); }
         e = sm(0.12, 0.18, t);
+        f = sm(0.302, 0.318, t);   // past the knuckles; the thumb ends before this
       }
       // body
       const head = my > 0.335 ? sm(0.318, 0.345, my) : (Math.hypot(mx, mz) > 0.06 ? 0 : sm(0.318, 0.345, my));
@@ -167,8 +168,8 @@ const HERO3D = (() => {
       W[2] = b * head; W[1] = b * (1 - head) * chest; W[0] = b * (1 - head) * (1 - chest) * (1 - leg);
       const lw = b * (1 - head) * (1 - chest) * leg;
       W[7] = lw * sideL * (1 - knee); W[8] = lw * sideL * knee; W[9] = lw * (1 - sideL) * (1 - knee); W[10] = lw * (1 - sideL) * knee;
-      W[L ? 3 : 5] = a * (1 - e); W[L ? 4 : 6] = a * e;
-      let tot = 0; for (let k = 0; k < 4; k++) { let bi = 0; for (let j = 1; j < 11; j++) if (W[j] > W[bi]) bi = j; si[i * 4 + k] = bi; sw[i * 4 + k] = W[bi]; tot += W[bi]; W[bi] = -1; }
+      W[L ? 3 : 5] = a * (1 - e); W[L ? 4 : 6] = a * e * (1 - f); W[L ? 11 : 12] = a * e * f;
+      let tot = 0; for (let k = 0; k < 4; k++) { let bi = 0; for (let j = 1; j < 13; j++) if (W[j] > W[bi]) bi = j; si[i * 4 + k] = bi; sw[i * 4 + k] = W[bi]; tot += W[bi]; W[bi] = -1; }
       for (let k = 0; k < 4; k++) sw[i * 4 + k] = tot > 0 ? Math.max(0, sw[i * 4 + k]) / tot : (k === 0 ? 1 : 0);
     }
     const geo = new T.BufferGeometry();
@@ -207,7 +208,9 @@ const HERO3D = (() => {
     const img = new Image(), tex = new T.Texture(img); tex.flipY = false; tex.anisotropy = 8;
     img.onload = () => { tex.needsUpdate = true; mat.map = tex; mat.color.set(0xffffff); mat.needsUpdate = true; }; img.src = src.tex;
     const body = new T.SkinnedMesh(geo, mat); body.castShadow = true; body.frustumCulled = false; hero.g.add(body);
-    const bones = [p.hips, p.chest, p.head, p.armL, p.elbowL, p.armR, p.elbowR, p.legL, p.kneeL, p.legR, p.kneeR];
+    // finger joints sit on the knuckle line, 0.304 below the elbow along the forearm
+    p.fingersL = grpIn(p.elbowL, 0, -0.304, 0.015); p.fingersR = grpIn(p.elbowR, 0, -0.304, 0.015);
+    const bones = [p.hips, p.chest, p.head, p.armL, p.elbowL, p.armR, p.elbowR, p.legL, p.kneeL, p.legR, p.kneeR, p.fingersL, p.fingersR];
     p.armL.rotation.set(0, 0, 0.557); p.armR.rotation.set(0, 0, -0.557); hero.g.updateMatrixWorld(true);
     // the rig's joint groups stand in for bones; a skeleton only reads their world matrices
     const skel = new T.Skeleton(bones as unknown as THREE.Bone[]); body.bind(skel);
@@ -223,6 +226,7 @@ const PL = {
   atk: null as AttackState | null, hold: -1, draw: -1, blocking: false, rollT: 0, rollDir: new T.Vector3(), iframes: 0, hurtT: 0, emberCd: 0, stDelay: 0, airT: 0, animT: 0,
   lock: null as Enemy | null, dead: false, moving: 0, sprint: false, step: 0, combo: 0, comboT: 0, queued: false, spin: 0,
   castT: 0, pushing: 0, landT: 0, vaultT: 0, rollBack: false, glideArm: false, chargeFx: false,
+  landRoll: false, skidT: 0, mantleT: 0, wasClimb: false, climbT: 0, landHard: 0,
 };
 const CAM = { yaw: 0, pitch: 0.32, dist: 7.2, shake: 0, cur: new T.Vector3(0, 8, 76) };
 const keys: Record<string, boolean> = {}, mouse = { l: false, r: false };
@@ -371,7 +375,7 @@ function updatePlayer(dt: number) {
   const aiming = S.weapon === 'bow' && (mouse.r || p.draw >= 0);
   p.climb = false; p.sprint = false;
   if (p.rollT > 0) {
-    p.rollT -= dt; p.vel.x = p.rollDir.x * (p.rollBack ? 8 : 11.5); p.vel.z = p.rollDir.z * (p.rollBack ? 8 : 11.5); if (!p.rollBack) p.yaw = Math.atan2(p.rollDir.x, p.rollDir.z);
+    p.rollT -= dt; if (p.rollT <= 0) p.landRoll = false; p.vel.x = p.rollDir.x * (p.rollBack ? 8 : 11.5); p.vel.z = p.rollDir.z * (p.rollBack ? 8 : 11.5); if (!p.rollBack) p.yaw = Math.atan2(p.rollDir.x, p.rollDir.z);
   } else {
     if (p.grounded && !p.swim && mag > 0) { const g2 = groundAt(p.pos.x + dx * 0.7, p.pos.z + dz * 0.7); if (g2 - p.pos.y > 0.8) p.climb = true; }
     p.sprint = keys.ShiftLeft && mag > 0 && S.st > 0.5 && p.grounded && !p.swim && !p.climb && !p.blocking && !aiming && !p.crouch;
@@ -380,12 +384,18 @@ function updatePlayer(dt: number) {
     if (p.sprint) useStamina(13 * dt);
     if (p.swim) { useStamina(3.5 * dt); if (S.st <= 0) { S.hp -= 6 * dt; if (S.hp <= 0) { S.hp = 0; playerDied(); } } }
     if (p.atk) { const k = 1 - Math.exp(-7 * dt); p.vel.x = lerp(p.vel.x, 0, k); p.vel.z = lerp(p.vel.z, 0, k); }   // the lunge carries, then settles
-    else { const k = 1 - Math.exp(-(p.grounded ? 14 : 3.5) * dt); p.vel.x = lerp(p.vel.x, dx * sp, k); p.vel.z = lerp(p.vel.z, dz * sp, k); }
+    else {
+      if (p.grounded && mag === 0 && p.moving > 8 && p.skidT <= 0 && !p.climb && !p.swim) { p.skidT = 0.32; sfx('step'); }
+      const k = 1 - Math.exp(-(p.skidT > 0 && mag === 0 ? 5 : p.grounded ? 14 : 3.5) * dt); p.vel.x = lerp(p.vel.x, dx * sp, k); p.vel.z = lerp(p.vel.z, dz * sp, k);
+    }
+    if (p.skidT > 0) { p.skidT -= dt; if (mag > 0 || !p.grounded) p.skidT = 0; else if (Math.random() < dt * 30) burst(p.pos.x + Math.sin(p.yaw) * 0.3, p.pos.y + 0.08, p.pos.z + Math.cos(p.yaw) * 0.3, 0xd8d2b8, 1, 1.4, 0.4, 1); }
     if (aiming || p.blocking) faceAim();
     else if (p.atk) { /* committed to the swing */ }
     else if (p.lock && mag === 0) p.yaw = angLerp(p.yaw, Math.atan2(p.lock.pos.x - p.pos.x, p.lock.pos.z - p.pos.z), 10 * dt);
     else if (mag > 0) p.yaw = angLerp(p.yaw, Math.atan2(dx, dz), 13 * dt);
   }
+  if (p.wasClimb && !p.climb && p.climbT > 0.35 && p.grounded && mag > 0 && p.rollT <= 0) { p.mantleT = 0.34; sfx('step'); }
+  p.climbT = p.climb ? p.climbT + dt : (p.wasClimb ? p.climbT : 0); if (!p.climb && !p.wasClimb) p.climbT = 0; p.wasClimb = p.climb; if (p.mantleT > 0) p.mantleT -= dt;
   p.pos.x += p.vel.x * dt; p.pos.z += p.vel.z * dt;
   if (p.grounded && inTemple(p.pos.x, p.pos.z, 2)) pushBlock();
   resolveCollide(p.pos, 0.45, p.pos.y);
@@ -406,7 +416,11 @@ function updatePlayer(dt: number) {
     if (p.pos.y <= surf) {
       if (deep) { burst(p.pos.x, WATER_Y, p.pos.z, 0xdff6ff, 18, 5, 0.6); addRing(p.pos.x, WATER_Y + 0.06, p.pos.z, 0xffffff, 2.6, 0.7); sfx('splash'); }
       else if (p.vel.y < -21) hurtPlayer((-p.vel.y - 21) * 3.2, p.pos.x, p.pos.z, { unblockable: true });
-      else if (p.vel.y < -6) { sfx('land'); burst(p.pos.x, surf + 0.1, p.pos.z, 0xd8d2b8, 6, 2.2, 0.35, 2); p.landT = 0.16; }
+      else if (p.vel.y < -6) {
+        sfx('land'); burst(p.pos.x, surf + 0.1, p.pos.z, 0xd8d2b8, p.vel.y < -14 ? 12 : 6, 2.2, 0.35, 2);
+        if (p.vel.y < -14 && mag > 0 && p.moving > 3 && !p.atk) { p.rollT = 0.42; p.rollBack = false; p.landRoll = true; p.rollDir.set(Math.sin(p.yaw), 0, Math.cos(p.yaw)); sfx('roll'); }
+        else { p.landHard = p.vel.y < -14 ? 1 : 0; p.landT = p.landHard ? 0.3 : 0.16; }
+      }
       p.pos.y = surf; p.grounded = true; p.vel.y = 0; p.glideArm = false;
     }
   }
@@ -436,7 +450,7 @@ function animHero(dt: number) {
   else if (p.crouch) mode = 'crouch'; else if (p.moving > 6.5) mode = 'run'; else if (p.moving > 0.6) mode = 'walk';
   animHumanoid(hp, mode, mode === 'crouch' && p.moving < 0.5 ? 0 : p.animT, dt, p.vel.y);
   CARRY.update(dt); hero.glider.visible = p.glide; hero.quiver.visible = S.hasBow;
-  hero.sword.rotation.set(0.95, 0, 0);
+  hero.sword.rotation.set(0.4, 0, 0);
   let spin = 0; hero.trailH.material.opacity = hero.trailV.material.opacity = hero.trailS.material.opacity = 0;
   if (p.atk) {
     const k = p.atk.t / p.atk.dur, c = p.atk.combo;
@@ -462,8 +476,28 @@ function animHero(dt: number) {
   if (p.castT > 0) { hp.armL.rotation.set(-1.6, 0, -0.2); hp.elbowL.rotation.x = -0.1; hp.chest.rotation.y = -0.3; }
   if (p.pushing > 0) { hp.armL.rotation.set(-1.4, 0, 0); hp.armR.rotation.set(-1.4, 0, 0); hp.elbowL.rotation.x = hp.elbowR.rotation.x = -0.5; hp.pivot.rotation.x = 0.45; }
   if (p.rollT > 0 && !p.rollBack) { hp.pivot.rotation.x = (1 - p.rollT / 0.42) * Math.PI * 2; hp.hips.position.y = -1.15; hp.legL.rotation.x = hp.legR.rotation.x = -1.6; hp.kneeL.rotation.x = hp.kneeR.rotation.x = 2; hp.armL.rotation.x = hp.armR.rotation.x = -1; }
-  if (p.landT > 0) hp.hips.position.y -= Math.sin(p.landT / 0.16 * Math.PI) * 0.14;
+  if (p.landT > 0) {
+    const L = p.landHard ? 0.3 : 0.16, k = Math.sin(p.landT / L * Math.PI);
+    hp.hips.position.y -= k * (p.landHard ? 0.32 : 0.14);
+    if (p.landHard) { hp.pivot.rotation.x += k * 0.35; hp.legL.rotation.x -= k * 0.7; hp.legR.rotation.x -= k * 0.5; hp.kneeL.rotation.x += k * 1.2; hp.kneeR.rotation.x += k * 1.0; hp.armL.rotation.z += k * 0.6; hp.armR.rotation.z -= k * 0.6; }
+  }
+  if (p.skidT > 0 && p.rollT <= 0) {   /* braced against the slide: leaning back, lead foot out front, arms out for balance */
+    const k = Math.min(1, p.skidT / 0.12);
+    hp.pivot.rotation.x = -0.32 * k; hp.hips.position.y -= 0.12 * k; hp.legL.rotation.x = -0.75 * k; hp.kneeL.rotation.x = 0.2 * k; hp.legR.rotation.x = 0.35 * k; hp.kneeR.rotation.x = 0.85 * k;
+    hp.armL.rotation.z = 0.7 * k; hp.armR.rotation.z = -0.7 * k; hp.armL.rotation.x = -0.4 * k; hp.armR.rotation.x = -0.2 * k;
+  }
+  if ((p.mantleT > 0 || p.vaultT > 0) && p.rollT <= 0 && !p.atk) {   /* pulling up over an edge: hands planted, one knee driving up */
+    const k = p.vaultT > 0 ? 1 : Math.sin(Math.min(1, p.mantleT / 0.34) * Math.PI);
+    hp.pivot.rotation.x = 0.45 * k; hp.armL.rotation.set(-0.9 * k, 0, 0.15 * k); hp.armR.rotation.set(-0.9 * k, 0, -0.15 * k); hp.elbowL.rotation.x = hp.elbowR.rotation.x = -1.1 * k;
+    hp.legL.rotation.x = -1.5 * k; hp.kneeL.rotation.x = 1.9 * k; hp.legR.rotation.x = 0.3 * k; hp.kneeR.rotation.x = 0.4 * k;
+  }
   if (p.dead) { hp.pivot.rotation.x = -1.45; hp.hips.position.y = -1.25; }
+  if (hp.fingersL && hp.fingersR) {
+    const drawing = S.weapon === 'bow' && !p.swim && (p.draw >= 0 || mouse.r);
+    const holdR = CARRY.it.sword.held, holdL = CARRY.it.bow.held || CARRY.it.shield.held;
+    const cR = drawing ? 0.95 : holdR ? 1.55 : 0.3, cL = holdL ? 1.5 : 0.3, k = 1 - Math.exp(-18 * dt);
+    hp.fingersR.rotation.z = lerp(hp.fingersR.rotation.z, cR, k); hp.fingersL.rotation.z = lerp(hp.fingersL.rotation.z, -cL, k);
+  }
   // cloth follows speed and wind
   const sp = Math.min(p.moving * 0.085, 0.95), wv = Math.sin(p.animT * 5.5), air = p.grounded ? 0 : clamp(-p.vel.y * 0.06, -0.3, 0.9);
   hero.cape.rotation.x = 0.12 + sp + air + wv * 0.05 * (1 + p.moving * 0.3);
@@ -481,7 +515,7 @@ function animHero(dt: number) {
   const STEEL = lam(0xe6eef2), GOLDM = lam(GOLD), WOOD = lam(0x9a6436), DARKW = lam(0x6e4226), REDM = lam(0xc8452f), LEATH = lam(0x4f3524), RUNEG = glowMat(0x7ff3e0);
   const zc = (r0: number, r1: number, h: number, n: number) => cyl(r0, r1, h, n).rotateX(Math.PI / 2);   // a cylinder lying along z
   // --- sword: tapered diamond blade with a rune fuller, swept guard, wrapped grip, pommel ---
-  const sw = hero.sword; clear(sw); sw.position.set(0, -0.085, 0.03); sw.scale.setScalar(1);
+  const sw = hero.sword; clear(sw); sw.position.set(0.028, 0.09, 0.02); sw.scale.setScalar(1);
   { const st = [[0.115, 0.034, 0.0115], [0.45, 0.031, 0.01], [0.76, 0.026, 0.008], [0.875, 0.016, 0.006], [0.95, 0.0006, 0.0006]], P = [];
     const ring = (q: any[]) => [[q[1], 0, q[0]], [0, q[2], q[0]], [-q[1], 0, q[0]], [0, -q[2], q[0]]];
     for (let i = 0; i < st.length - 1; i++) { const a = ring(st[i]), b = ring(st[i + 1]); for (let k = 0; k < 4; k++) { const k2 = (k + 1) % 4; P.push(...a[k], ...a[k2], ...b[k2], ...a[k], ...b[k2], ...b[k]); } }
@@ -501,7 +535,7 @@ function animHero(dt: number) {
     for (let k = 0; k < 8; k++) { const L = k % 2 ? 0.075 : 0.115, h = grpIn(sh, 0, 0, 0); h.rotation.y = k * Math.PI / 4; const rm = 0.078 + L / 2, c = mesh(new T.ConeGeometry(0.021, L, 4), GOLDM, rm, 0.052 * (1 - (rm / R) * (rm / R)) + 0.007, 0, h, true); c.rotation.z = -Math.PI / 2 - 0.36 * rm / R; c.scale.x = 0.32; }
     mesh(bx(0.045, 0.014, 0.2), LEATH, 0.06, -0.018, 0, sh, true); mesh(bx(0.045, 0.014, 0.2), LEATH, -0.08, -0.018, 0, sh, true); }
   // --- bow: recurve limbs swept along a curve, wrapped grip, gold nocks; string and nocked arrow follow the draw ---
-  const bow = hero.bow; clear(bow); bow.position.set(0, -0.085, 0.03); bow.scale.setScalar(1);
+  const bow = hero.bow; clear(bow); bow.position.set(-0.028, 0.09, 0.02); bow.scale.setScalar(1);
   { const N = 30, SEG = 7, P = [], I = [], prof = (t: number) => { const a = Math.abs(t); return [0.25 * Math.pow(a, 1.7) - 0.08 * smooth(0.76, 1, a), 0.62 * t]; };
     for (let i = 0; i <= N; i++) { const t = i / N * 2 - 1, a = Math.abs(t), [y, z] = prof(t), [y2, z2] = prof(t + 0.01), [y1, z1] = prof(t - 0.01); let ty = y2 - y1, tz = z2 - z1; const tl = Math.hypot(ty, tz); ty /= tl; tz /= tl;
       const g = smooth(0.2, 0.08, a), w = lerp(lerp(0.021, 0.0105, a), 0.019, g), h = lerp(lerp(0.0125, 0.0055, a), 0.019, g);   // flat limbs, round at the grip
@@ -544,7 +578,7 @@ function bowPose(hp: Rig, dr: number) {
   hp.hips.rotation.y = -0.3; hp.chest.rotation.set(0, -(yaw - 0.3), 0); hp.head.rotation.set(-el * 0.6, yaw * 0.86, 0);
   _aim.set(Math.sin(yaw) * Math.cos(el), Math.sin(el), Math.cos(yaw) * Math.cos(el));   // line of sight in chest space
   // the grip sits on the line of sight through the jaw, at arm's length from the bow shoulder
-  const S = hp.armL.position, reach = -hp.elbowL.position.y - hp.handL.position.y + 0.085; _dl.subVectors(JAW, S); const b = _dl.dot(_aim), full = -b + Math.sqrt(Math.max(0, b * b - _dl.lengthSq() + reach * reach));
+  const S = hp.armL.position, reach = -hp.elbowL.position.y - hp.handL.position.y + hero.bow.position.y * -1; _dl.subVectors(JAW, S); const b = _dl.dot(_aim), full = -b + Math.sqrt(Math.max(0, b * b - _dl.lengthSq() + reach * reach));
   _gp.copy(JAW).addScaledVector(_aim, full); _u1.subVectors(_gp, S).normalize(); armTo(hp.armL, hp.elbowL, _u1, _u1, UP);
   const pull = full * (0.52 + 0.48 * dr); _nk.copy(_gp).addScaledVector(_aim, -pull);
   _tg.copy(_nk).addScaledVector(_aim, -0.075); _tg.y -= 0.02; armReach(hp.armR, hp.elbowR, hp.handR, _tg, POLE_DRAW);

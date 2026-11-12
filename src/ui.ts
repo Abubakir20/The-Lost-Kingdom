@@ -21,7 +21,18 @@ const IC: Record<string, string[]> = {
   ember: ['#f0703a', '<path d="M12 2c1 5 6.5 6 6.5 12a6.5 6.5 0 0 1-13 0c0-3 2-4 2-7 2 1 3.5 2 4.5-5z"/><path d="M12 12c1 2 3 3 3 5a3 3 0 0 1-6 0c0-2 2-2 3-5z" fill="#ffe08a"/>'],
   tunic: ['#b9b29a', '<path d="M6 3l6 2 6-2 3.5 5-3.5 2v11H6V10L2.5 8z"/>'],
 };
-const icon = (id: string) => { const i = IC[id] || IC.stone; return `<span class="ic"><svg viewBox="0 0 24 24" fill="${i[0]}" aria-hidden="true">${i[1]}</svg></span>`; };
+/* painted icons for the items in the atlas (4 per row, in this order); everything else keeps its vector icon */
+const ICON_ART = ['potion', 'berry', 'roast', 'herb', 'wood', 'stone', 'crystal', 'fang', 'meat', 'core', 'arrow', 'shard', 'key', 'heart', 'relic'];
+/* NPC portraits in the atlas (3 per row), keyed by the name shown in dialogue */
+const PORTRAITS = ['Elder Maren', 'Borin', 'Tessa', 'Halric', 'Pip', 'The Cartographer'];
+const UI_ART = window.TLK_UI || {};
+if (UI_ART.icons) document.documentElement.style.setProperty('--icons', `url(${UI_ART.icons})`);
+if (UI_ART.portraits) document.documentElement.style.setProperty('--portraits', `url(${UI_ART.portraits})`);
+const icon = (id: string) => {
+  const k = UI_ART.icons ? ICON_ART.indexOf(id) : -1;
+  if (k >= 0) return `<span class="ic art"><i style="background-position:${(k % 4) * 100 / 3}% ${Math.floor(k / 4) * 100 / 3}%"></i></span>`;
+  const i = IC[id] || IC.stone; return `<span class="ic"><svg viewBox="0 0 24 24" fill="${i[0]}" aria-hidden="true">${i[1]}</svg></span>`;
+};
 const SIGIL = '<svg class="sigil" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true"><path d="M32 6a26 26 0 1 0 26 26" stroke-width="3"/><path d="M47 22a16.5 16.5 0 1 0 1.5 13" stroke-width="3"/><circle cx="32" cy="32" r="6.5" stroke-width="3"/><path d="M32 0v4M32 60v4M0 32h4M60 32h4" stroke-width="2"/></svg>';
 
 /* dialogue with a typewriter reveal; E always advances */
@@ -29,6 +40,9 @@ let dlgType: { n: number; full: string } | null = null;
 function renderDlg() {
   if (!dlg) return;
   const pg = dlg.pages[dlg.i], text = typeof pg === 'string' ? pg : pg.t;
+  const face = UI_ART.portraits ? PORTRAITS.indexOf(dlg.who) : -1, fe = $('dlgFace');
+  $('dialog').classList.toggle('face', face >= 0);
+  if (face >= 0) fe.style.backgroundPosition = `${(face % 3) * 50}% ${Math.floor(face / 3) * 100}%`;
   $('dlgWho').textContent = dlg.who; $('dlgText').textContent = ''; dlgType = { full: text, n: 0 };
   const o = $('dlgOpts'); o.innerHTML = '';
   const opts = pageOpts(pg);

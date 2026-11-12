@@ -16,7 +16,12 @@ const art = {};
 for (const f of fs.readdirSync('src/art').sort()) {
   const m = f.match(/^(\w+)\.jpg$/); if (m) art[m[1]] = 'data:image/jpeg;base64,' + b64('src/art/' + f);
 }
-const texJs = 'window.TLK_TEX=' + JSON.stringify(tex) + ';\nwindow.TLK_ART=' + JSON.stringify(art) + ';\n';
+// interface art: the item icon atlas (4x4, transparent PNG) and the NPC portrait atlas (3x2 JPEG)
+const ui = {};
+if (fs.existsSync('src/ui')) for (const f of fs.readdirSync('src/ui').sort()) {
+  const m = f.match(/^(\w+)\.(jpg|png)$/); if (m) ui[m[1]] = 'data:image/' + (m[2] === 'jpg' ? 'jpeg' : 'png') + ';base64,' + b64('src/ui/' + f);
+}
+const texJs = 'window.TLK_TEX=' + JSON.stringify(tex) + ';\nwindow.TLK_ART=' + JSON.stringify(art) + ';\nwindow.TLK_UI=' + JSON.stringify(ui) + ';\n';
 
 // the sculpted hero: packed mesh (positions, normals, uvs, indices) and its texture
 const heroJs = fs.existsSync('src/hero3d/mesh.bin')

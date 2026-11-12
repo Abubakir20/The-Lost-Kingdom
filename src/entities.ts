@@ -119,11 +119,6 @@ scene.add(hero.g);
   mesh(cyl(0.007, 0.007, 1.16, 3), lam(0xf2ead8), 0, 0, 0, hero.bow).rotation.x = Math.PI / 2; mesh(cyl(0.04, 0.04, 0.16, 6), lam(RED), 0, -0.58, 0, hero.bow).rotation.x = Math.PI / 2;
   // glider
   hero.glider = grpIn(p.hips, 0, 2.5, 0); mesh(bx(2.6, 0.04, 1.2), lam(RED), 0, 0, 0, hero.glider); mesh(bx(2.7, 0.06, 0.06), lam(TIMBER), 0, 0.03, 0.56, hero.glider); mesh(bx(0.06, 0.06, 1.2), lam(TIMBER), 0, 0.03, 0, hero.glider); mesh(bx(0.9, 0.045, 0.5), lam(GOLD), 0, 0.01, 0, hero.glider); hero.glider.visible = false;
-  // sword trails
-  const tm = () => new T.MeshBasicMaterial({ color: 0xeafffb, transparent: true, opacity: 0, blending: T.AdditiveBlending, depthWrite: false, side: T.DoubleSide });
-  hero.trailH = mesh(new T.RingGeometry(1.15, 2.75, 28, 1, -2.85, 2.56).rotateX(-Math.PI / 2), tm(), 0, 1.2, 0, hero.g, true);
-  hero.trailV = mesh(new T.RingGeometry(1.0, 2.6, 22, 1, -0.5, 2.5).rotateY(-Math.PI / 2), tm(), -0.2, 1.3, 0, hero.g, true);
-  hero.trailS = mesh(new T.RingGeometry(1.3, 3.4, 40).rotateX(-Math.PI / 2), tm(), 0, 1.15, 0, hero.g, true);
 }
 addOutline(hero.g, 0.013);
 /* ---------- sculpted hero: one skinned mesh driven by the same joints as before ----------
@@ -285,7 +280,9 @@ function swordHit(heavy: any, combo: number) {
     const crit = Math.random() < (combo === 2 ? 0.25 : 0.12), kx = heavy ? dx / (d || 1) : fx, kz = heavy ? dz / (d || 1) : fz;
     damageEnemy(e, swordDmg() * (heavy ? 2.4 : combo === 2 ? 1.5 : 1) * (crit ? 1.8 : 1) * rand(0.92, 1.08), { crit, kx, kz, kb: heavy ? 10 : combo === 2 ? 8 : 3.5 });
     const nr = e.def.radius * 0.75 / (d || 1);
-    impactStar(e.pos.x + dx * -nr, e.pos.y + e.def.height * 0.58, e.pos.z + dz * -nr, crit ? 0xffd36a : 0xfff4dc, (crit ? 2.6 : heavy || combo === 2 ? 2.1 : 1.6) * Math.max(1, e.def.scale * 0.8));
+    const hx = e.pos.x + dx * -nr, hy = e.pos.y + e.def.height * 0.58, hz = e.pos.z + dz * -nr, sd = SWORD_TRAIL.dir;
+    impactStar(hx, hy, hz, crit ? 0xffd36a : 0xfff4dc, (crit ? 2.0 : heavy || combo === 2 ? 1.6 : 1.2) * Math.max(1, e.def.scale * 0.8));
+    hitSparks(e, hx, hy, hz, sd.x || -dx / (d || 1), sd.y, sd.z || -dz / (d || 1), crit || heavy || combo === 2);
     any = true;
   }
   if (any) { sfx(heavy || combo === 2 ? 'hitBig' : 'hit'); CAM.shake = heavy ? 0.4 : combo === 2 ? 0.28 : 0.14; hitStop = heavy ? 0.12 : combo === 2 ? 0.09 : 0.055; }
@@ -332,7 +329,8 @@ function toggleLock() {
 /* a blocked blow: the shield flashes and the hit pushes the hero back a step */
 function blockFeedback(sx: number, sz: number) {
   const fx = Math.sin(PL.yaw), fz = Math.cos(PL.yaw);
-  impactStar(PL.pos.x + fx * 0.55, PL.pos.y + 1.15, PL.pos.z + fz * 0.55, 0xbff4ff, 2.0);
+  impactStar(PL.pos.x + fx * 0.55, PL.pos.y + 1.15, PL.pos.z + fz * 0.55, 0xbff4ff, 1.5);
+  SPARKS.emit(PL.pos.x + fx * 0.6, PL.pos.y + 1.15, PL.pos.z + fz * 0.6, fx, 0.35, fz, 0xffd08a, 16, 9, 0.75);
   const ax = PL.pos.x - sx, az = PL.pos.z - sz, ad = Math.hypot(ax, az) || 1;
   PL.vel.x += ax / ad * 4.5; PL.vel.z += az / ad * 4.5; CAM.shake = Math.max(CAM.shake, 0.18);
 }
@@ -451,19 +449,16 @@ function animHero(dt: number) {
   animHumanoid(hp, mode, mode === 'crouch' && p.moving < 0.5 ? 0 : p.animT, dt, p.vel.y);
   CARRY.update(dt); hero.glider.visible = p.glide; hero.quiver.visible = S.hasBow;
   hero.sword.rotation.set(0.4, 0, 0);
-  let spin = 0; hero.trailH.material.opacity = hero.trailV.material.opacity = hero.trailS.material.opacity = 0;
+  let spin = 0;
   if (p.atk) {
     const k = p.atk.t / p.atk.dur, c = p.atk.combo;
     hero.sword.rotation.set(1.4, 0, 0);
     if (p.atk.heavy) {
       const w = smooth(0.25, 0.8, k); spin = w * Math.PI * 2; hp.armR.rotation.set(-1.5, 0, -0.5); hp.elbowR.rotation.x = -0.1; hp.armL.rotation.set(-0.6, 0, 0.9); hp.pivot.rotation.x = 0.18; hp.chest.rotation.y = -0.5;
-      hero.trailS.material.opacity = Math.sin(clamp((k - 0.25) / 0.6, 0, 1) * Math.PI) * 0.75; hero.trailS.rotation.y = -spin;
     } else if (c === 2) {
       const w = smooth(0.2, 0.55, k); hp.armR.rotation.set(lerp(-3.2, -0.25, w), 0, -0.1); hp.elbowR.rotation.x = lerp(-0.9, -0.05, w); hp.armL.rotation.set(lerp(-2.6, 0.2, w), 0, 0.2); hp.pivot.rotation.x = lerp(-0.3, 0.5, w); hp.hips.position.y = -0.9 + Math.sin(k * Math.PI) * 0.18;
-      hero.trailV.material.opacity = Math.sin(clamp((k - 0.2) / 0.5, 0, 1) * Math.PI) * 0.8;
     } else {
       const w = smooth(0.12, 0.55, k), d = c === 0 ? 1 : -1; hp.chest.rotation.y = lerp(-0.95, 0.95, w) * d; hp.armR.rotation.set(-1.45, 0, lerp(-1.25, 0.95, w) * d - 0.15); hp.elbowR.rotation.x = -0.15; hp.armL.rotation.set(0.3, 0, 0.5); hp.pivot.rotation.x = 0.2; hp.legL.rotation.x = -0.5; hp.kneeL.rotation.x = 0.5; hp.legR.rotation.x = 0.45;
-      hero.trailH.material.opacity = Math.sin(clamp((k - 0.12) / 0.5, 0, 1) * Math.PI) * 0.75; hero.trailH.scale.x = d;
     }
   } else if (p.hold > 0.28) { hp.armR.rotation.set(-0.9, 0, -1.3); hp.elbowR.rotation.x = -1.2; hp.chest.rotation.y = -0.8; hp.pivot.rotation.x = 0.16; hp.legL.rotation.x = -0.4; hp.kneeL.rotation.x = 0.5; hero.sword.rotation.set(1.3, 0, 0); }
   if (p.blocking) {   // guard: shield squared up in front of the body, sword hand held back, knees soft
@@ -508,6 +503,7 @@ function animHero(dt: number) {
   hero.g.position.copy(p.pos); if (p.swim) hero.g.position.y -= 0.15;
   hero.g.rotation.y = p.yaw + spin;
   hero.g.visible = !(p.hurtT > 0 && Math.floor(p.hurtT * 30) % 2 === 0);
+  SWORD_TRAIL.update(dt, !!p.atk && CARRY.it.sword.held, !!(p.atk && p.atk.heavy));
 }
 /* ---------- gear: sword, shield and bow rebuilt to real proportions (sword ~1.04 m, shield 0.58 m, bow 1.24 m on a 1.78 m hero) ---------- */
 (() => {
@@ -667,6 +663,111 @@ function spawnProj(type: string, pos: THREE.Vector3, dir: THREE.Vector3, speed: 
   return pr;
 }
 function killProj(pr: Projectile, fx?: boolean) { pr.live = false; pr.m.visible = false; if (fx) { burst(pr.pos.x, pr.pos.y, pr.pos.z, pr.type === 'fire' ? 0xff8a3c : pr.type === 'spore' ? 0xc77bff : 0xe8dcc0, pr.type === 'arrow' ? 4 : 16, pr.type === 'arrow' ? 3 : 5, 0.45); if (pr.type === 'fire') addRing(pr.pos.x, pr.pos.y, pr.pos.z, 0xff9a4a, 1.8, 0.3); } }
+/* ---------- the blade's trail: a ribbon swept by the real edge, newest end bright, tail fading in a sixth of a second ----------
+   Each frame while a swing is on, the blade's base and tip are sampled in world space. The ribbon between those samples is
+   smoothed with a Catmull-Rom curve so it stays round at any frame rate, and it only shows where the blade moved fast. */
+const SWORD_TRAIL = (() => {
+  const MAX = 28, SUB = 4, ROWS = (MAX - 1) * SUB + 1, LIFE = 0.16;
+  const samples: { b: THREE.Vector3; t: THREE.Vector3; age: number; w: number }[] = [];
+  const pos = new Float32Array(ROWS * 6), al = new Float32Array(ROWS * 2), idx: number[] = [];
+  for (let r = 0; r < ROWS - 1; r++) { const a = r * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+  const geo = new T.BufferGeometry(); geo.setAttribute('position', new T.BufferAttribute(pos, 3)); geo.setAttribute('alpha', new T.BufferAttribute(al, 1)); geo.setIndex(idx);
+  const mat = new T.ShaderMaterial({
+    uniforms: { col: { value: new T.Color(0xe6fbff) }, core: { value: new T.Color(0xffffff) } },
+    vertexShader: 'attribute float alpha; varying float vA; void main(){ vA = alpha; gl_Position = projectionMatrix * viewMatrix * vec4(position, 1.0); }',
+    fragmentShader: 'uniform vec3 col; uniform vec3 core; varying float vA; void main(){ float a = clamp(vA, 0.0, 1.0); gl_FragColor = vec4(mix(col, core, a * a) * a, a); }',
+    transparent: true, depthWrite: false, blending: T.AdditiveBlending, side: T.DoubleSide,
+  });
+  const ribbon = new T.Mesh(geo, mat); ribbon.frustumCulled = false; ribbon.renderOrder = 4; scene.add(ribbon);
+  const BASE = new T.Vector3(0, 0, 0.36), TIP = new T.Vector3(0, 0, 0.97), lastTip = new T.Vector3(), cur = new T.Vector3();
+  const dir = new T.Vector3(); let had = false;
+  const cr = (p0: number, p1: number, p2: number, p3: number, t: number) => { const t2 = t * t, t3 = t2 * t; return 0.5 * (2 * p1 + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 + (-p0 + 3 * p1 - 3 * p2 + p3) * t3); };
+  return {
+    /** direction the edge is travelling, for sparks; zero when it isn't */
+    dir,
+    update(dt: number, on: boolean, heavy: boolean) {
+      for (const s of samples) s.age += dt;
+      while (samples.length && samples[samples.length - 1].age > LIFE) samples.pop();
+      if (on && dt > 0) {
+        hero.g.updateMatrixWorld(true);
+        const sw = hero.sword; cur.copy(TIP); sw.localToWorld(cur);
+        const speed = had ? cur.distanceTo(lastTip) / dt : 0;
+        if (had && speed > 1e-3) dir.subVectors(cur, lastTip).normalize(); else dir.set(0, 0, 0);
+        lastTip.copy(cur); had = true;
+        const w = clamp((speed - 2.5) / 6, 0, 1);
+        samples.unshift({ b: sw.localToWorld(BASE.clone()), t: cur.clone(), age: 0, w });
+        if (samples.length > MAX) samples.pop();
+      } else if (!on) { had = false; dir.set(0, 0, 0); }
+      const n = samples.length; ribbon.visible = n > 1;
+      if (n < 2) return;
+      let r = 0;
+      for (let i = 0; i < n - 1; i++) {
+        const s0 = samples[Math.max(0, i - 1)], s1 = samples[i], s2 = samples[i + 1], s3 = samples[Math.min(n - 1, i + 2)];
+        for (let k = 0; k < SUB; k++) {
+          const t = k / SUB, o = r * 6;
+          for (let c = 0; c < 3; c++) {
+            const key = c === 0 ? 'x' : c === 1 ? 'y' : 'z';
+            pos[o + c] = cr(s0.b[key], s1.b[key], s2.b[key], s3.b[key], t);
+            pos[o + 3 + c] = cr(s0.t[key], s1.t[key], s2.t[key], s3.t[key], t);
+          }
+          const age = lerp(s1.age, s2.age, t), wt = lerp(s1.w, s2.w, t), fade = Math.pow(Math.max(0, 1 - age / LIFE), 1.6) * wt;
+          al[r * 2] = fade * 0.12; al[r * 2 + 1] = fade * 0.95; r++;
+        }
+      }
+      const last = samples[n - 1], o = r * 6; pos[o] = last.b.x; pos[o + 1] = last.b.y; pos[o + 2] = last.b.z; pos[o + 3] = last.t.x; pos[o + 4] = last.t.y; pos[o + 5] = last.t.z; al[r * 2] = al[r * 2 + 1] = 0; r++;
+      geo.setDrawRange(0, (r - 1) * 6); geo.attributes.position.needsUpdate = true; (geo.attributes.alpha as THREE.BufferAttribute).needsUpdate = true;
+    },
+  };
+})();
+/* ---------- sparks: short bright streaks thrown along a direction, drawn as motion-stretched lines ---------- */
+const SPARKS = (() => {
+  const N = 96, pos = new Float32Array(N * 12), col = new Float32Array(N * 12), v = new Float32Array(N * 3), p = new Float32Array(N * 3), life = new Float32Array(N), max = new Float32Array(N), rgb = new Float32Array(N * 3), wid = new Float32Array(N);
+  const idx: number[] = []; for (let i = 0; i < N; i++) { const a = i * 4; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+  let next = 0;
+  const geo = new T.BufferGeometry(); geo.setAttribute('position', new T.BufferAttribute(pos, 3)); geo.setAttribute('color', new T.BufferAttribute(col, 3)); geo.setIndex(idx);
+  const quads = new T.Mesh(geo, new T.MeshBasicMaterial({ vertexColors: true, transparent: true, blending: T.AdditiveBlending, depthWrite: false, fog: false, side: T.DoubleSide }));
+  quads.frustumCulled = false; quads.renderOrder = 5; scene.add(quads);
+  const c = new T.Color(), d = new T.Vector3(), r = new T.Vector3(), vel = new T.Vector3(), view = new T.Vector3(), side = new T.Vector3();
+  return {
+    /** n streaks from a point, mostly along (dx,dy,dz) within the given spread; zero direction scatters them all round */
+    emit(x: number, y: number, z: number, dx: number, dy: number, dz: number, color: number, n: number, speed: number, spread = 0.7) {
+      c.setHex(color); d.set(dx, dy, dz); const aimed = d.lengthSq() > 1e-6; if (aimed) d.normalize();
+      for (let k = 0; k < n; k++) {
+        const i = next; next = (next + 1) % N;
+        r.set(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1).normalize();
+        if (aimed) r.multiplyScalar(spread).add(d).normalize();
+        const s = speed * (0.55 + Math.random() * 0.7);
+        p[i * 3] = x; p[i * 3 + 1] = y; p[i * 3 + 2] = z; v[i * 3] = r.x * s; v[i * 3 + 1] = r.y * s + 1.2; v[i * 3 + 2] = r.z * s;
+        rgb[i * 3] = c.r; rgb[i * 3 + 1] = c.g; rgb[i * 3 + 2] = c.b; max[i] = life[i] = 0.14 + Math.random() * 0.16; wid[i] = 0.016 + Math.random() * 0.016;
+      }
+    },
+    update(dt: number) {
+      for (let i = 0; i < N; i++) {
+        const o = i * 12;
+        if (life[i] <= 0) { col.fill(0, o, o + 12); continue; }
+        life[i] -= dt; v[i * 3 + 1] -= 14 * dt; v[i * 3] *= 1 - 3 * dt; v[i * 3 + 2] *= 1 - 3 * dt;
+        p[i * 3] += v[i * 3] * dt; p[i * 3 + 1] += v[i * 3 + 1] * dt; p[i * 3 + 2] += v[i * 3 + 2] * dt;
+        const k = Math.max(0, life[i] / max[i]), tl = 0.05;
+        // the streak runs from the spark back along its motion; its width faces the camera
+        vel.set(v[i * 3], v[i * 3 + 1], v[i * 3 + 2]); view.set(p[i * 3] - camera.position.x, p[i * 3 + 1] - camera.position.y, p[i * 3 + 2] - camera.position.z);
+        side.crossVectors(vel, view); const sl = side.length(); if (sl > 1e-6) side.multiplyScalar(wid[i] * (0.4 + 0.6 * k) / sl); else side.set(0, 0, 0);
+        const hx = p[i * 3], hy = p[i * 3 + 1], hz = p[i * 3 + 2], tx = hx - vel.x * tl, ty = hy - vel.y * tl, tz = hz - vel.z * tl;
+        pos[o] = hx + side.x; pos[o + 1] = hy + side.y; pos[o + 2] = hz + side.z; pos[o + 3] = hx - side.x; pos[o + 4] = hy - side.y; pos[o + 5] = hz - side.z;
+        pos[o + 6] = tx + side.x; pos[o + 7] = ty + side.y; pos[o + 8] = tz + side.z; pos[o + 9] = tx - side.x; pos[o + 10] = ty - side.y; pos[o + 11] = tz - side.z;
+        const hb = k * 1.6, tb = k * 0.12;
+        for (let q = 0; q < 3; q++) { col[o + q] = col[o + 3 + q] = Math.min(1, rgb[i * 3 + q] * hb); col[o + 6 + q] = col[o + 9 + q] = rgb[i * 3 + q] * tb; }
+      }
+      geo.attributes.position.needsUpdate = true; geo.attributes.color.needsUpdate = true;
+    },
+  };
+})();
+/* what a blade strike throws: stone and wood shed hot sparks, living things a brief pale spray */
+function hitSparks(e: Enemy, x: number, y: number, z: number, dx: number, dy: number, dz: number, big: boolean) {
+  const hard = e.type === 'sentinel' || !!e.def.boss, n = big ? 14 : 9;
+  if (hard) SPARKS.emit(x, y, z, dx, dy, dz, 0xffc070, n + 4, big ? 11 : 8, 0.8);
+  else if (e.type === 'wisp') SPARKS.emit(x, y, z, dx, dy, dz, 0xd0a0ff, n, big ? 8 : 6, 0.9);
+  else SPARKS.emit(x, y, z, dx, dy, dz, 0xf4fbff, n, big ? 8 : 6, 0.65);
+}
 /* ---------- hit feedback: impact stars and arrows that stay where they land ---------- */
 const STAR_TEX = (() => {
   const c = makeCanvas(64, 64), x = ctx2d(c), g = x.createRadialGradient(32, 32, 0, 32, 32, 30);
@@ -684,7 +785,7 @@ function impactStar(x: number, y: number, z: number, color: number, size: number
     if (STARS.length >= 12) st = STARS.reduce((a, b) => (a.t > b.t ? a : b));
     else { const s = new T.Sprite(new T.SpriteMaterial({ map: STAR_TEX, transparent: true, blending: T.AdditiveBlending, depthWrite: false, depthTest: false })); s.renderOrder = 5; scene.add(s); st = { s, t: 0, life: 0, size: 0 }; STARS.push(st); }
   }
-  st.s.position.set(x, y, z); st.s.material.color.setHex(color); st.s.material.rotation = Math.random() * 0.8 - 0.4; st.t = 0; st.life = 0.16; st.size = size; st.s.visible = true;
+  st.s.position.set(x, y, z); st.s.material.color.setHex(color); st.s.material.rotation = Math.random() * 0.8 - 0.4; st.t = 0; st.life = 0.11; st.size = size * 0.72; st.s.visible = true;
 }
 const STUCK: { m: THREE.Object3D; owner: Enemy | null; t: number }[] = [];
 /* leave an arrow standing in whatever it hit; the tip sinks a little way in */
@@ -707,6 +808,7 @@ function stickArrow(point: THREE.Vector3, vel: THREE.Vector3, owner: Enemy | nul
 /* arrows in a creature that comes back to life are gone */
 function unstickFrom(e: Enemy) { for (const q of STUCK) if (q.owner === e) { q.m.visible = false; q.owner = null; scene.add(q.m); } }
 function updateHitFeedback(dt: number, raw: number) {
+  SPARKS.update(dt);
   for (const st of STARS) {
     if (st.t >= st.life) { st.s.visible = false; continue; }
     st.t += Math.max(dt, raw * 0.35); const k = Math.min(1, st.t / st.life);
@@ -734,7 +836,8 @@ function updateProjs(dt: number) {
         if (Math.abs(pr.pos.x - e.pos.x) < e.def.radius + 0.45 && Math.abs(pr.pos.z - e.pos.z) < e.def.radius + 0.45 && Math.abs(pr.pos.y - cy) < e.def.height * 0.6 + 0.3) {
           const crit = pr.type === 'arrow' && Math.random() < 0.18;
           damageEnemy(e, pr.dmg * (crit ? 1.8 : 1), { crit, fire: pr.type === 'fire', kx: pr.vel.x * 0.03, kz: pr.vel.z * 0.03, kb: 3 }); sfx('hit');
-          impactStar(pr.pos.x, pr.pos.y, pr.pos.z, pr.type === 'fire' ? 0xffb050 : crit ? 0xffd36a : 0xfff4dc, crit ? 2.2 : 1.4);
+          impactStar(pr.pos.x, pr.pos.y, pr.pos.z, pr.type === 'fire' ? 0xffb050 : crit ? 0xffd36a : 0xfff4dc, crit ? 1.7 : 1.1);
+          if (pr.type === 'arrow') hitSparks(e, pr.pos.x, pr.pos.y, pr.pos.z, -pr.vel.x, -pr.vel.y * 0.3, -pr.vel.z, crit);
           if (pr.type === 'arrow') {
             // the arrow sinks in at the creature's surface, on the side it came from
             const hx = pr.pos.x - e.pos.x, hz = pr.pos.z - e.pos.z, hd = Math.hypot(hx, hz) || 1, sr = e.def.radius * 0.8 * e.def.scale;
@@ -935,8 +1038,8 @@ function updateEnemy(e: Enemy, dt: number) {
   if (e.punch > 0) e.punch -= dt;
   const sq = Math.max(0, e.punch) * 1.4; e.g.scale.set(D.scale * (1 + sq), D.scale * (1 - sq * 0.6), D.scale * (1 + sq));
   // strike flash (white) and attack telegraph (hot orange)
-  const fl = Math.max(0, e.flash) * 6, tp = tele > 0 ? (0.25 + 0.75 * tele) * (0.6 + 0.4 * Math.sin(e.anim * 30)) : 0;
-  for (const m of e.mats) m.emissive.setRGB(fl + tp * 0.9, fl + tp * 0.28, fl + tp * 0.08);
+  const fl = Math.max(0, e.flash) * 3.1, tp = tele > 0 ? (0.25 + 0.75 * tele) * (0.6 + 0.4 * Math.sin(e.anim * 30)) : 0;
+  for (const m of e.mats) m.emissive.setRGB(fl + tp * 0.9, fl * 0.92 + tp * 0.28, fl * 0.8 + tp * 0.08);
   if (e.p.hips) animHumanoid(e.p, pose !== 'idle' ? pose : e.moved ? (e.state === 'chase' ? 'run' : 'walk') : 'idle', e.anim, dt);
   else if (e.type === 'boar') { const s = e.moved ? Math.sin(e.anim * 15) * 0.7 : 0; e.p.legs.forEach((l: THREE.Object3D, i: number) => l.rotation.x = (i === 0 || i === 3) ? s : -s); e.p.body.position.y = 0.85 + (e.moved ? Math.abs(Math.cos(e.anim * 15)) * 0.06 : Math.sin(e.anim * 2) * 0.02); e.p.headG.rotation.x = pose === 'windup' ? 0.5 : pose === 'strike' ? -0.5 : pose === 'stagger' ? -0.3 : Math.sin(e.anim * 1.3) * 0.1; if (pose === 'windup' && Math.random() < 0.3) burst(e.pos.x - Math.sin(e.yaw) * 0.8, e.pos.y + 0.1, e.pos.z - Math.cos(e.yaw) * 0.8, 0xd8d2b8, 1, 2, 0.3, 2); }
   else if (e.type === 'wisp') { e.p.wings.forEach((w: THREE.Object3D) => w.rotation.z = w.userData.s * Math.sin(e.anim * 16) * 0.75); e.p.tail.forEach((t: THREE.Object3D, k: number) => { t.position.x = Math.sin(e.anim * 5 - k * 0.9) * 0.14 * (k + 1); t.position.y = Math.cos(e.anim * 4 - k) * 0.06 * (k + 1); }); e.p.body.scale.setScalar(1 + tele * 0.3); }

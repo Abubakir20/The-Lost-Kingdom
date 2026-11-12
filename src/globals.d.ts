@@ -33,11 +33,9 @@ interface HumanoidLook {
 interface Hero extends Humanoid {
   cape: THREE.Group; tails: THREE.Group[]; pony: THREE.Group; quiver: THREE.Group;
   sword: THREE.Group; shield: THREE.Group; bow: THREE.Group; glider: THREE.Group;
-  trailH: Trail; trailV: Trail; trailS: Trail;
   /** Pull the bowstring to a point in the bow's own space, or pass null for the string at rest. */
   bowDraw: (nock: THREE.Vector3 | null) => void;
 }
-type Trail = THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
 /** Parts of a non-humanoid creature (boar, wisp, forest guardian); each kind has its own set. */
 type CreatureRig = Record<string, any>;
 

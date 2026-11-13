@@ -56,18 +56,26 @@ const { open } = require('./shot.js');
   await ev('placePlayer(CAVE_MOUTH.x,CAVE_MOUTH.z+1.5)'); await frames(4); await ev('findInteract()'); chk('cave mouth prompt', await ev('return nearInteract&&nearInteract._l') === 'Enter the cave');
   await ev('enterCave()'); await new Promise(r => setTimeout(r, 900)); await frames(4); chk('inside the grotto', await ev('return inCave(PL.pos.x)&&regionName()==="Veilfall Grotto"&&qState("veil")==="active"'));
   await ev('placePlayer(327.5,7.6)'); await frames(3); await ev('findInteract();nearInteract&&nearInteract.act()'); await frames(3); chk('grappling hook found', await ev('return has("hook")'));
-  const grap = async (x, z, yaw, pitch, n) => { await ev(`hookRelease();placePlayer(${x},${z});PL.yaw=${yaw}+Math.PI;CAM.yaw=${yaw};CAM.pitch=${pitch};updateCamera(0.016,true)`); await frames(2); await ev('fireHook()'); await frames(n); };
-  await grap(338.6, 0, -Math.PI / 2, 0.1, 70); chk('hook crosses the first chasm', await ev('return PL.pos.x>349&&PL.grounded&&HOOK.state==="none"'));
-  await grap(354, 1.2, 0, -0.25, 70); chk('hook climbs to the ledge', await ev('return PL.pos.y>6.5&&PL.grounded'));
-  await grap(354, -6.2, 0, -0.1, 100); chk('hangs from a free ring', await ev('return HOOK.state==="hang"'));
-  await ev('CAM.yaw=0;CAM.pitch=-0.05;updateCamera(0.016,true)'); await frames(2); await ev('fireHook()'); await frames(110); chk('chains to the next ring and lands', await ev('return PL.pos.z<-34&&PL.grounded&&PL.pos.y>6.5'));
-  await grap(356, -37, -Math.PI / 2, -0.2, 160); chk('slab pulled down into a bridge', await ev('return !!G.flags.cv_slab&&SLAB.deck.on'));
+  /* turns the camera until the crosshair snaps to the wanted ring */
+  const aimRing = ri => ev(`for(let q=-0.55;q<=1.3;q+=0.03){CAM.pitch=q;updateCamera(0.016,true);camera.updateMatrixWorld();if(RINGS.indexOf(hookTarget())===${ri})return true}return false`);
+  const grap = async (x, z, yaw, pitch, n, ri) => { await ev(`hookRelease();placePlayer(${x},${z});PL.yaw=${yaw}+Math.PI;CAM.yaw=${yaw};CAM.pitch=${pitch};updateCamera(0.016,true)`); await frames(2); if (ri !== undefined) await aimRing(ri); await ev('fireHook()'); await frames(n); };
+  await grap(338.6, 0, -Math.PI / 2, 0.1, 70, 0); chk('hook crosses the first chasm', await ev('return PL.pos.x>349&&PL.grounded&&HOOK.state==="none"'));
+  await grap(354, 1.2, 0, -0.5, 70, 1); chk('hook climbs to the ledge', await ev('return PL.pos.y>6.5&&PL.grounded'));
+  await grap(354, -6.2, 0, -0.1, 100, 2); chk('hangs from a free ring', await ev('return HOOK.state==="hang"'));
+  await ev('CAM.yaw=0;CAM.pitch=-0.05;updateCamera(0.016,true)'); await frames(2); await aimRing(3); await ev('fireHook()'); await frames(110); chk('chains to the next ring and lands', await ev('return PL.pos.z<-34&&PL.grounded&&PL.pos.y>6.5'));
+  await grap(356, -37, -Math.PI / 2, -0.2, 160, 4); chk('slab pulled down into a bridge', await ev('return !!G.flags.cv_slab&&SLAB.deck.on'));
   await ev('placePlayer(366,-37)'); await frames(200); chk('golem wakes', await ev('return golemFight&&golem.state!=="sleep"'));
   await ev('G.p.hp=G.p.maxHp;golem.state="walk";const h=golem.hp;damageEnemy(golem,30,{});window._gh=h'); chk('golem shrugs off blows', await ev('return golem.hp===_gh'));
   await ev('golem.state="stun";golem.t=0;damageEnemy(golem,30,{})'); chk('stunned golem takes damage', await ev('return golem.hp<_gh'));
   await ev('golem.hp=5;damageEnemy(golem,30,{})'); await frames(260); chk('golem defeated, reward and way home', await ev('return !golem.alive&&G.flags.golem&&CHESTS.c_golem.g.visible&&exitGate.visible'));
   await ev('G.p.hp=G.p.maxHp;placePlayer(350,0)'); await frames(5); await ev('PL.pos.set(343,0.5,0);PL.grounded=false'); await frames(60); await new Promise(r => setTimeout(r, 900)); await frames(4); chk('a fall puts you back on safe ground', await ev('return inCave(PL.pos.x)&&PL.pos.y>-1&&!PL.dead'));
   await ev('leaveCave()'); await new Promise(r => setTimeout(r, 900)); await frames(4); chk('back out by the falls', await ev('return !inCave(PL.pos.x)&&Math.hypot(PL.pos.x-CAVE_OUT.x,PL.pos.z-CAVE_OUT.z)<2'));
+  await ev('G.p.hp=G.p.maxHp');
+  // the hook bites anywhere: a cliff in the valley pulls you up to it
+  await ev('placePlayer(40,-72);PL.yaw=Math.PI;CAM.yaw=0;CAM.pitch=-0.15;updateCamera(0.016,true)'); await frames(2);
+  chk('hook aims at bare rock', await ev('return aimHook().ok&&!AIM.ring'));
+  await ev('window._y0=PL.pos.y;fireHook()'); await frames(60); chk('free hook reels you up to the cliff', await ev('return PL.pos.y>_y0+3&&PL.pos.z<-78'));
+  await ev('hookRelease();placePlayer(MESA.x,MESA.z);CAM.yaw=0;CAM.pitch=-0.55;updateCamera(0.016,true)'); await frames(2); chk('nothing to bite in open sky', await ev('return !aimHook().ok'));
   await ev('G.p.hp=G.p.maxHp');
   // swimming under the stone bridge stays in the water; the deck above is still walkable
   await ev('placePlayer(BRIDGE.x+3.5,2);CAM.yaw=Math.PI;keys.KeyW=true;G.p.st=G.p.maxSt;window._uy=-9'); for (let i = 0; i < 24; i++) { await frames(10); await ev('G.p.st=G.p.maxSt;if(onBridge(PL.pos.x,PL.pos.z))_uy=Math.max(_uy,PL.pos.y)'); }

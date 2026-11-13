@@ -126,7 +126,7 @@ function chest(id: string, x: number, z: number, items: Record<string, number>, 
     for (const k in items) giveItem(k, items[k]); if (coins) giveCoins(coins);
     if (items.shard) { notify('Sunstone Shards: ' + shardCount() + '/3', 'quest'); }
     if (items.heart) { banner('Heart of the Forest', 'It beats in time with your own'); G.p.maxHp += 20; G.p.hp = G.p.maxHp; }
-    if (items.hook) { banner('Grappling Hook', 'Look at a glowing ring and press G'); notify('Aim at a glowing ring and press G (or the middle mouse button). From a hanging ring, press G again at the next one, or Space to let go.', 'quest'); }
+    if (items.hook) { banner('Grappling Hook', 'Point the crosshair anywhere and press G'); notify('Point the crosshair at rock, wood, a roof or a ring and press G (or the middle mouse button). Hanging, press G again to swing on, or Space to let go.', 'quest'); }
     if (items.stoneheart) { banner('Golem Heartstone', 'Your health has grown'); G.p.maxHp += 20; G.p.hp = G.p.maxHp; qDone('veil'); gainXp(150); }
     gainXp(10); autosave();
   } });

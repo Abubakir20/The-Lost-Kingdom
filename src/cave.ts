@@ -143,72 +143,128 @@ function dropSlab() {
   if (G.flags.cv_slab) return; G.flags.cv_slab = true; SLAB.fall = 0.001; sfx('rumble'); notify('The door stone topples across the gap.'); autosave();
 }
 
-/* ---------- the hook: fire, fly, reel in; hang from free rings and fire again ---------- */
-const HOOK = { state: 'none', ring: null as GrappleRing | null, t: 0, dur: 0, from: new T.Vector3(), to: new T.Vector3(), tip: new T.Vector3(), last: null as GrappleRing | null };
-const ropeMesh = mesh((() => { const g = cyl(0.022, 0.022, 1, 4); g.translate(0, 0.5, 0); return g; })(), lam(0x8a6a44), 0, -99, 0, scene, true); ropeMesh.visible = false;
+/* ---------- the hook: fire it wherever the crosshair points (rock, wood, roof, a wall), or at a ring; it flies,
+   bites, and reels you in. Rings, the roof and anything overhead leave you hanging, so you can fire again. ---------- */
+const HOOK = { state: 'none', ring: null as GrappleRing | null, anchor: new T.Vector3(), land: null as number[] | null, hangs: false, t: 0, dur: 0,
+  from: new T.Vector3(), to: new T.Vector3(), tip: new T.Vector3(), dir: new T.Vector3(), last: null as GrappleRing | null };
+const ropeMesh = mesh((() => { const g = cyl(0.035, 0.035, 1, 5); g.translate(0, 0.5, 0); return g; })(), lam(0xd8b888, { emissive: 0x3a2a14 }), 0, -99, 0, scene, true); ropeMesh.visible = false;
 const hookHead = mesh(new T.ConeGeometry(0.08, 0.24, 5), lam(0xb0b4b8), 0, -99, 0, scene, true); hookHead.visible = false;
 const hasHook = () => has('hook');
-/* the best ring in front of the camera, in reach and in sight */
-function hookTarget(): GrappleRing | null {
-  if (!hasHook() || PL.dead || cine) return null;
-  camera.getWorldDirection(_v5); let best: GrappleRing | null = null, bd = 0.8;
+const HOOK_RANGE = 42;
+/* what the hook would bite: a ring the camera looks almost straight at, else the first solid thing under the crosshair */
+const AIM = { ring: null as GrappleRing | null, p: new T.Vector3(), land: null as number[] | null, hangs: false, ok: false };
+/* the crosshair rides a little above the screen's centre, so the hero never hides what you aim at */
+const AIM_Y = 0.26, _aimRay = new T.Raycaster(), _aimV = new T.Vector2();
+const _aimD = new T.Vector3(), _aimO = new T.Vector3(), _near: { b: BoxCollider[]; c: CircleCollider[] } = { b: [], c: [] };
+function solidAt(x: number, y: number, z: number) {
+  if (terrainH(x, z) > y) return true;
+  if (inCave(x) && y > caveCeil(x, z) - 0.05) return true;
+  for (const b of _near.b) if (x > b.x0 && x < b.x1 && z > b.z0 && z < b.z1 && y < (b.top !== undefined ? b.top : 11)) return true;
+  for (const c of _near.c) if ((x - c.x) * (x - c.x) + (z - c.z) * (z - c.z) < c.r * c.r && y < (c.top !== undefined ? c.top : 7)) return true;
+  return false;
+}
+function hookTarget(): GrappleRing | null { aimHook(); return AIM.ok ? AIM.ring : null; }
+function aimHook() {
+  AIM.ok = false; AIM.ring = null; AIM.land = null; AIM.hangs = false;
+  if (!hasHook() || PL.dead || cine) return AIM;
+  _aimV.set(0, AIM_Y); _aimRay.setFromCamera(_aimV, camera); _aimD.copy(_aimRay.ray.direction);
+  /* a ring close to the crosshair wins */
+  let bd = 0.88;
   for (const r of RINGS) {
     if (!r.on() || r === HOOK.ring) continue;
-    ringPos(r, _rw); const d = _rw.distanceTo(PL.pos); if (d > 23 || d < 1.5) continue;
-    _v4.subVectors(_rw, camera.position).normalize(); const dot = _v4.dot(_v5); if (dot < bd) continue;
-    if (!ringInSight(_rw)) continue;
-    best = r; bd = dot;
+    ringPos(r, _rw); const d = _rw.distanceTo(PL.pos); if (d > HOOK_RANGE || d < 1.5) continue;
+    _v4.subVectors(_rw, camera.position).normalize(); const dot = _v4.dot(_aimD); if (dot < bd || !inSight(_rw, 0.2)) continue;
+    bd = dot; AIM.ring = r; AIM.p.copy(_rw); AIM.ok = true;
   }
-  return best;
+  if (AIM.ok) return AIM;
+  /* otherwise march the crosshair ray (it sits above the hero's head, see AIM_Y) out from the camera to the first solid thing */
+  _aimV.set(0, AIM_Y); _aimRay.setFromCamera(_aimV, camera); _aimO.copy(_aimRay.ray.origin); _aimD.copy(_aimRay.ray.direction); const t0 = Math.max(0.5, _v4.subVectors(PL.pos, _aimO).dot(_aimD) - 0.5), t1 = t0 + HOOK_RANGE + 2;
+  const ax0 = Math.min(_aimO.x + _aimD.x * t0, _aimO.x + _aimD.x * t1) - 2, ax1 = Math.max(_aimO.x + _aimD.x * t0, _aimO.x + _aimD.x * t1) + 2;
+  const az0 = Math.min(_aimO.z + _aimD.z * t0, _aimO.z + _aimD.z * t1) - 2, az1 = Math.max(_aimO.z + _aimD.z * t0, _aimO.z + _aimD.z * t1) + 2;
+  _near.b.length = 0; _near.c.length = 0;
+  for (const b of boxes) if (b.on && b.x1 > ax0 && b.x0 < ax1 && b.z1 > az0 && b.z0 < az1) _near.b.push(b);
+  for (const c of circles) if (c.on && c.x + c.r > ax0 && c.x - c.r < ax1 && c.z + c.r > az0 && c.z - c.r < az1) _near.c.push(c);
+  let prev = t0, hit = -1;
+  for (let t = t0; t <= t1; t += 0.3) {
+    const x = _aimO.x + _aimD.x * t, y = _aimO.y + _aimD.y * t, z = _aimO.z + _aimD.z * t;
+    if (!inCave(x) && y < WATER_Y && terrainH(x, z) < WATER_Y) return AIM;     // open water: nothing to bite
+    if (solidAt(x, y, z)) { hit = t; break; }
+    prev = t;
+  }
+  if (hit < 0) return AIM;
+  let lo = prev, hi = hit; for (let k = 0; k < 7; k++) { const m = (lo + hi) / 2; if (solidAt(_aimO.x + _aimD.x * m, _aimO.y + _aimD.y * m, _aimO.z + _aimD.z * m)) hi = m; else lo = m; }
+  const P = AIM.p.set(_aimO.x + _aimD.x * lo, _aimO.y + _aimD.y * lo, _aimO.z + _aimD.z * lo), d = P.distanceTo(PL.pos);
+  if (d > HOOK_RANGE || d < 2 || !inSight(P, 0.5)) return AIM;
+  /* what kind of surface: the top of something (land on it), the underside of something (hang), or a wall (fly at it) */
+  const g = terrainH(P.x, P.z), sl = Math.max(Math.abs(terrainH(P.x + 0.8, P.z) - g), Math.abs(terrainH(P.x, P.z + 0.8) - g)) / 0.8;
+  if (Math.abs(g - P.y) < 0.45 && sl < 0.9 && !solidAt(P.x, g + 1.8, P.z)) AIM.land = [P.x, g, P.z];
+  else { for (const b of _near.b) if (b.top !== undefined && P.x > b.x0 - 0.1 && P.x < b.x1 + 0.1 && P.z > b.z0 - 0.1 && P.z < b.z1 + 0.1 && P.y > b.top - 0.45) AIM.land = [P.x, b.top, P.z];
+    for (const c of _near.c) if (c.top !== undefined && Math.hypot(P.x - c.x, P.z - c.z) < c.r + 0.1 && P.y > c.top - 0.45) AIM.land = [P.x, c.top, P.z]; }
+  AIM.hangs = !AIM.land && solidAt(P.x, P.y + 0.35, P.z) && !solidAt(P.x, P.y - 2.2, P.z);
+  AIM.ok = true; return AIM;
 }
-function ringInSight(p: THREE.Vector3) {
-  const sx = PL.pos.x, sy = PL.pos.y + 1.5, sz = PL.pos.z;
-  for (let i = 1; i < 14; i++) { const k = i / 14, x = lerp(sx, p.x, k), y = lerp(sy, p.y, k), z = lerp(sz, p.z, k); if (terrainH(x, z) > y + 0.15 || (inCave(x) && y > caveCeil(x, z) - 0.2)) return false; }
+/* a clear line from the hero's chest to a point (the last stretch, where the hook bites, is not checked) */
+function inSight(p: THREE.Vector3, slack: number) {
+  const sx = PL.pos.x, sy = PL.pos.y + 1.5, sz = PL.pos.z, L = Math.hypot(p.x - sx, p.y - sy, p.z - sz), n = Math.max(6, Math.ceil(L / 0.5));
+  for (let i = 1; i < n; i++) { const k = i / n; if (L * (1 - k) < slack) break; const x = lerp(sx, p.x, k), y = lerp(sy, p.y, k), z = lerp(sz, p.z, k); if (terrainH(x, z) > y + 0.15 || (inCave(x) && y > caveCeil(x, z) - 0.2)) return false; }
   return true;
 }
 function fireHook() {
   if (!hasHook()) return;
-  if (PL.swim || PL.dead || cine || HOOK.state === 'fly' || HOOK.state === 'pull' || HOOK.state === 'hop' || HOOK.state === 'yank') return;
-  const r = hookTarget(); if (!r) { if (inCave(PL.pos.x)) { sfx('deny'); notify('No ring in reach. Look at a glowing ring and press G.'); } return; }
-  ringPos(r, _rw); HOOK.ring = r; HOOK.state = 'fly'; HOOK.t = 0; HOOK.dur = Math.max(0.12, _rw.distanceTo(PL.pos) / 46);
-  PL.atk = null; PL.hold = -1; PL.draw = -1; PL.crouch = false; PL.rollT = 0; PL.yaw = Math.atan2(_rw.x - PL.pos.x, _rw.z - PL.pos.z);
+  if (PL.swim || PL.dead || cine || HOOK.state === 'fly' || HOOK.state === 'hop' || HOOK.state === 'yank') return;
+  const A = aimHook(); if (!A.ok) { sfx('deny'); return; }
+  HOOK.ring = A.ring; HOOK.anchor.copy(A.p); HOOK.land = A.ring ? A.ring.land : A.land; HOOK.hangs = A.ring ? !A.ring.land && !A.ring.pull : A.hangs;
+  HOOK.state = 'fly'; HOOK.t = 0; HOOK.dur = Math.max(0.1, A.p.distanceTo(PL.pos) / 60); HOOK.tip.copy(PL.pos);
+  PL.atk = null; PL.hold = -1; PL.draw = -1; PL.crouch = false; PL.rollT = 0; PL.yaw = Math.atan2(A.p.x - PL.pos.x, A.p.z - PL.pos.z);
   sfx('bow'); tone(900, 0.12, 'triangle', 0.08, null, 0, 1500);
 }
 function hookRelease() { HOOK.state = 'none'; HOOK.ring = null; PL.grounded = false; PL.vel.set(0, 0, 0); PL.airT = 0; ropeMesh.visible = hookHead.visible = false; }
+/* where the hook is now (a ring may ride on something that moves) */
+function hookPoint(out: THREE.Vector3) { return HOOK.ring ? ringPos(HOOK.ring, out) : out.copy(HOOK.anchor); }
 /* drives the player while the hook is out; returns true when it has taken over the frame */
 function hookDrive(dt: number): boolean {
   if (HOOK.state === 'none') return false;
-  const p = PL, r = HOOK.ring; if (!r || p.dead) { hookRelease(); return false; }
-  ringPos(r, _rw); HOOK.t += dt;
+  const p = PL, r = HOOK.ring; if (p.dead) { hookRelease(); return false; }
+  hookPoint(_rw); HOOK.t += dt;
   if (HOOK.state === 'fly') {
-    p.vel.set(0, 0, 0); hero.p.handR.getWorldPosition(_v4); HOOK.tip.lerpVectors(_v4, _rw, Math.min(1, HOOK.t / HOOK.dur));
-    if (!p.grounded) { p.vel.y = 0; }
+    hero.p.handR.getWorldPosition(_v4); HOOK.tip.lerpVectors(_v4, _rw, Math.min(1, HOOK.t / HOOK.dur));
+    if (!p.grounded) p.vel.y = Math.max(p.vel.y, -2);
     if (HOOK.t >= HOOK.dur) {
-      sfx('clink'); burst(_rw.x, _rw.y, _rw.z, 0xfff0b0, 8, 3, 0.4, 2);
-      if (r.pull) { HOOK.state = 'yank'; HOOK.t = 0; }
-      else { HOOK.state = 'pull'; HOOK.t = 0; HOOK.from.copy(p.pos); HOOK.to.set(_rw.x, _rw.y - 1.95, _rw.z); HOOK.dur = Math.max(0.25, HOOK.from.distanceTo(HOOK.to) / 21); p.grounded = false; p.swim = false; sfx('swingBig'); }
+      sfx('clink'); burst(_rw.x, _rw.y, _rw.z, r ? 0xfff0b0 : 0xd8d2c0, 8, 3, 0.4, 2);
+      if (r && r.pull) { HOOK.state = 'yank'; HOOK.t = 0; }
+      else {
+        HOOK.state = 'pull'; HOOK.t = 0; HOOK.from.copy(p.pos); HOOK.dir.subVectors(_rw, p.pos).normalize();
+        if (r || HOOK.hangs) HOOK.to.set(_rw.x, _rw.y - 1.95, _rw.z);                       // hands on the ring, or on the rock overhead
+        else if (HOOK.land) HOOK.to.set(_rw.x - HOOK.dir.x * 0.6, _rw.y + 0.1, _rw.z - HOOK.dir.z * 0.6);   // up to the lip, then onto it
+        else HOOK.to.copy(_rw).addScaledVector(HOOK.dir, -0.9).setY(_rw.y - 1.2);          // a wall: fly at it, hands at the bite
+        HOOK.dur = Math.max(0.22, HOOK.from.distanceTo(HOOK.to) / 26); p.grounded = false; p.swim = false; sfx('swingBig');
+      }
     }
-    return HOOK.state === 'fly' ? !p.grounded : true;
+    return !p.grounded;
   }
   HOOK.tip.copy(_rw);
   if (HOOK.state === 'yank') {
-    if (HOOK.t > 0.28 && r.pull) { const f = r.pull; f(); CAM.shake = 0.3; }
+    if (HOOK.t > 0.28 && r && r.pull) { const f = r.pull; f(); CAM.shake = 0.3; }
     if (HOOK.t > 0.45) { HOOK.state = 'none'; HOOK.ring = null; }
     return false;
   }
   if (HOOK.state === 'pull') {
     const k = Math.min(1, HOOK.t / HOOK.dur), e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
-    p.pos.lerpVectors(HOOK.from, HOOK.to, e); p.pos.y += Math.sin(k * Math.PI) * 0.6;
+    p.pos.lerpVectors(HOOK.from, HOOK.to, e); p.pos.y += Math.sin(k * Math.PI) * 0.5;
     p.yaw = angLerp(p.yaw, Math.atan2(HOOK.to.x - HOOK.from.x, HOOK.to.z - HOOK.from.z), 12 * dt);
     if (Math.random() < 0.5) puff(p.pos.x, p.pos.y + 1, p.pos.z, 0xffffff, 0, 0, 0, 0.25);
     if (k >= 1) {
-      if (r.land) { HOOK.state = 'hop'; HOOK.t = 0; HOOK.from.copy(p.pos); HOOK.to.set(r.land[0], r.land[1], r.land[2]); }
-      else { HOOK.state = 'hang'; HOOK.t = 0; HOOK.last = r; notify('Hanging. Press G at the next ring, or Space to let go.'); }
+      if (HOOK.land) { HOOK.state = 'hop'; HOOK.t = 0; HOOK.from.copy(p.pos); HOOK.to.set(HOOK.land[0], HOOK.land[1], HOOK.land[2]); }
+      else if (r || HOOK.hangs) { HOOK.state = 'hang'; HOOK.t = 0; HOOK.last = r; if (!G.flags.hangHint) { G.flags.hangHint = true; notify('Hanging. Aim and press G to swing on, or Space to let go.'); } }
+      else { /* thrown at a wall: the rope lets go and you carry on, up and in */
+        HOOK.state = 'none'; HOOK.ring = null; ropeMesh.visible = hookHead.visible = false;
+        p.grounded = false; p.airT = 0; p.vel.set(HOOK.dir.x * 4, 6.5, HOOK.dir.z * 4); p.glideArm = false;
+      }
     }
     return true;
   }
   if (HOOK.state === 'hop') {
-    const k = Math.min(1, HOOK.t / 0.38); p.pos.lerpVectors(HOOK.from, HOOK.to, k); p.pos.y += Math.sin(k * Math.PI) * 1.1;
+    const k = Math.min(1, HOOK.t / 0.3); p.pos.lerpVectors(HOOK.from, HOOK.to, k); p.pos.y += Math.sin(k * Math.PI) * 0.9;
     if (k >= 1) { p.pos.copy(HOOK.to); p.grounded = true; p.vel.set(0, 0, 0); HOOK.state = 'none'; HOOK.ring = null; sfx('land'); burst(p.pos.x, p.pos.y + 0.1, p.pos.z, 0xd8d2b8, 6, 2.2, 0.35, 2); }
     return true;
   }
@@ -474,19 +530,15 @@ function updateCave(dt: number, raw: number, tsec: number) {
     else if (best) { caveGlow.position.set(best.x, best.y, best.z); caveGlow.color.setHex(best.c); caveGlow.intensity = caveAmt * 0.9; caveGlow.distance = 14; }
     if (!nearGolem) { } else caveGlow.color.setHex(0x7ff3e0);
   } else caveGlow.intensity = 0;
-  if (!CAVE_ROOT.visible) { if (hookMarkEl) hookMarkEl.style.display = 'none'; return; }
+  updateHookAim();
+  if (!CAVE_ROOT.visible) return;
   const fl = 1 + Math.sin(tsec * 19) * 0.08 + Math.sin(tsec * 31) * 0.06; for (const f of CAVE_TORCHES) f.scale.set(1, fl, 1);
   /* the slab falls over the gap */
   if (SLAB.fall > 0 && SLAB.fall < 1) { SLAB.fall = Math.min(1, SLAB.fall + dt * 1.4 * (0.4 + SLAB.fall * 2)); SLAB.piv.rotation.z = -Math.PI / 2 * SLAB.fall * SLAB.fall; if (SLAB.fall >= 1) { sfx('slam'); CAM.shake = 0.5; burst(361.5, 7.2, -37, 0xb9b2a0, 40, 6, 0.8); SLAB.box.on = false; SLAB.deck.on = true; } }
   for (const pl of PILLARS) { pl.dim = Math.max(0, pl.dim - dt); const k = pl.dim > 0 ? 0.35 : 1; for (const c of pl.cr) c.material.color.setRGB(0.5 * k, 0.95 * k, 0.88 * k); pl.hl.material.opacity = 0.45 * k; }
   /* rings: the one you can reach glows and is marked */
-  const tgt = MODE === 'play' && inCave(PL.pos.x) ? hookTarget() : null;
+  const tgt = AIM.ok ? AIM.ring : null;
   for (const r of RINGS) { r.m.visible = r.on(); r.glow.material.opacity = r === tgt ? 0.75 + Math.sin(tsec * 8) * 0.15 : 0.3; r.glow.scale.setScalar(r === tgt ? 3.2 : 2.2); }
-  if (!hookMarkEl) hookMarkEl = document.getElementById('hookMark');
-  if (hookMarkEl) {
-    if (tgt && HOOK.state !== 'pull' && HOOK.state !== 'hop') { ringPos(tgt, _rw); _rw.project(camera); hookMarkEl.style.display = 'block'; hookMarkEl.style.transform = `translate(${((_rw.x * 0.5 + 0.5) * (window.innerWidth || 1280)).toFixed(1)}px,${((-_rw.y * 0.5 + 0.5) * (window.innerHeight || 720)).toFixed(1)}px)`; }
-    else hookMarkEl.style.display = 'none';
-  }
   if (MODE !== 'play') return;
   /* safe ground for chasm falls; the fall itself */
   if (inCave(PL.pos.x)) {
@@ -508,6 +560,17 @@ const CAVE_MAP = (() => {
   }
   x.putImageData(img, 0, 0); return { c, W, H };
 })();
+/* the crosshair, and a mark on whatever the hook would bite */
+let hookDotEl: HTMLElement | null = null;
+function updateHookAim() {
+  if (!hookMarkEl) { hookMarkEl = document.getElementById('hookMark'); hookDotEl = document.getElementById('hookDot'); }
+  const on = MODE === 'play' && hasHook() && !cine && !PL.dead && HOOK.state !== 'pull' && HOOK.state !== 'hop';
+  if (on) aimHook(); else AIM.ok = false;
+  if (hookDotEl) { hookDotEl.style.display = on ? 'block' : 'none'; hookDotEl.classList.toggle('ok', AIM.ok); }
+  if (!hookMarkEl) return;
+  if (on && AIM.ok) { _rw.copy(AIM.p).project(camera); hookMarkEl.style.display = 'block'; hookMarkEl.classList.toggle('pt', !AIM.ring); hookMarkEl.style.transform = `translate(${((_rw.x * 0.5 + 0.5) * (window.innerWidth || 1280)).toFixed(1)}px,${((-_rw.y * 0.5 + 0.5) * (window.innerHeight || 720)).toFixed(1)}px)`; }
+  else hookMarkEl.style.display = 'none';
+}
 /* bring the grotto in line with the save */
 function caveSync() {
   SLAB.fall = G.flags.cv_slab ? 1 : 0; SLAB.piv.rotation.z = G.flags.cv_slab ? -Math.PI / 2 : 0; SLAB.box.on = !G.flags.cv_slab; SLAB.deck.on = !!G.flags.cv_slab;

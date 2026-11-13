@@ -26,7 +26,7 @@ An original 3D open-world fantasy adventure that runs in the browser. One self-c
 | 1 / 2 / 3 | Sword / bow / healing draught |
 | Q, F, R | Ember spell, dodge, lock on |
 | E | Interact |
-| G (or middle mouse) | Grappling hook, once found: fire at a glowing ring; from a hanging ring, G again at the next, Space to let go |
+| G (or middle mouse) | Grappling hook, once found: fires wherever the crosshair points (rock, wood, roofs, rings) and reels you in; hanging, G again to swing on, Space to let go |
 | Tab | Pack |
 
 ## Project layout

@@ -161,7 +161,7 @@ const ITEMS: Record<string, ItemDef> = {
   shard: { n: 'Sunstone Shard', c: 'Quest items', d: 'Warm to the touch, even at night.' },
   key: { n: 'Temple Key', c: 'Quest items', d: 'Three shards bound in gold wire. Opens the Temple of Echoes.' },
   heart: { n: 'Heart of the Forest', c: 'Artifacts', d: 'It beats slowly. It seems to know you.' },
-  hook: { n: 'Grappling Hook', c: 'Tools', d: 'Aim at a glowing ring and press G (or the middle mouse button) to reel yourself to it.' },
+  hook: { n: 'Grappling Hook', c: 'Tools', d: 'Point the crosshair at rock, wood, a roof or a ring and press G (or the middle mouse button): it bites, and reels you in.' },
   stoneheart: { n: 'Golem Heartstone', c: 'Artifacts', d: 'The vault golem’s crystal heart. It steadies your own.' },
   relic: { n: 'Eldorian Relic', c: 'Collectibles', d: 'A coin-sized seal from the lost kingdom. Five were hidden in the valley.' },
 };

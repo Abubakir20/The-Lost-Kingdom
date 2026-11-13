@@ -15,6 +15,8 @@ sun.castShadow = true; sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.05; 
 const circles: CircleCollider[] = [], boxes: BoxCollider[] = [];
 const addCircle = (x: number, z: number, r: number, top?: number) => { const c: CircleCollider = { x, z, r, on: true, top }; circles.push(c); return c; };   // top: world height of a surface you can stand on
 const addBox = (x0: number, x1: number, z0: number, z1: number, top?: number) => { const b: BoxCollider = { x0: Math.min(x0, x1), x1: Math.max(x0, x1), z0: Math.min(z0, z1), z1: Math.max(z0, z1), on: true, top }; boxes.push(b); return b; };
+/* the height of a box's top at a point: flat, or shaped like a roof */
+const boxTop = (b: BoxCollider, x: number, z: number) => b.surf ? b.surf(clamp(x, b.x0, b.x1), clamp(z, b.z0, b.z1)) : b.top;
 let hitTop: number | null = null;   // lowest standable top touched by the last resolveCollide that was given a height
 function resolveCollide(p: { x: number; z: number }, r: number, y?: number) {
   hitTop = null;
@@ -27,10 +29,11 @@ function resolveCollide(p: { x: number; z: number }, r: number, y?: number) {
     if (d < m && d > 1e-4) { p.x = c.x + dx / d * m; p.z = c.z + dz / d * m; if (c.top !== undefined && (hitTop === null || c.top < hitTop)) hitTop = c.top; }
   }
   for (let i = 0; i < boxes.length; i++) {
-    const b = boxes[i]; if (!b.on) continue;
-    if (y !== undefined && b.top !== undefined && y >= b.top - 0.3) continue;
+    const b = boxes[i]; if (!b.on || b.pass) continue;
     if (p.x > b.x0 - r && p.x < b.x1 + r && p.z > b.z0 - r && p.z < b.z1 + r) {
-      if (b.top !== undefined && (hitTop === null || b.top < hitTop)) hitTop = b.top;
+      const bt = boxTop(b, p.x, p.z);
+      if (y !== undefined && bt !== undefined && y >= bt - 0.3) continue;
+      if (bt !== undefined && (hitTop === null || bt < hitTop)) hitTop = bt;
       const pl = p.x - (b.x0 - r), pr = (b.x1 + r) - p.x, pn = p.z - (b.z0 - r), pf = (b.z1 + r) - p.z, m = Math.min(pl, pr, pn, pf);
       if (m === pl) p.x = b.x0 - r; else if (m === pr) p.x = b.x1 + r; else if (m === pn) p.z = b.z0 - r; else p.z = b.z1 + r;
     }
@@ -40,11 +43,18 @@ function resolveCollide(p: { x: number; z: number }, r: number, y?: number) {
 function platformAt(x: number, z: number, y: number): number {
   let h = -1e9; const pad = 0.25;
   for (let i = 0; i < circles.length; i++) { const c = circles[i]; if (c.top === undefined || !c.on || c.top > y + 0.35 || c.top <= h) continue; const dx = x - c.x, dz = z - c.z, m = c.r + pad; if (dx * dx + dz * dz < m * m) h = c.top; }
-  for (let i = 0; i < boxes.length; i++) { const b = boxes[i]; if (b.top === undefined || !b.on || b.top > y + 0.35 || b.top <= h) continue; if (x > b.x0 - pad && x < b.x1 + pad && z > b.z0 - pad && z < b.z1 + pad) h = b.top; }
+  for (let i = 0; i < boxes.length; i++) { const b = boxes[i]; if ((b.top === undefined && !b.surf) || !b.on) continue; if (!(x > b.x0 - pad && x < b.x1 + pad && z > b.z0 - pad && z < b.z1 + pad)) continue; const t = boxTop(b, x, z) as number; if (t > y + 0.35 || t <= h) continue; h = t; }
   return h;
 }
+/* the top of a climbable wall in front of you, if it is higher than a step: boxes with a top (or a roof), round things with a top */
+function climbTop(x: number, z: number, y: number): number | null {
+  let best: number | null = null;
+  for (let i = 0; i < boxes.length; i++) { const b = boxes[i]; if (!b.on || b.pass || (b.top === undefined && !b.surf)) continue; if (x > b.x0 && x < b.x1 && z > b.z0 && z < b.z1) { const t = boxTop(b, x, z) as number; if (t > y + 0.8 && (best === null || t > best)) best = t; } }
+  for (let i = 0; i < circles.length; i++) { const c = circles[i]; if (!c.on || c.top === undefined) continue; const dx = x - c.x, dz = z - c.z; if (dx * dx + dz * dz < c.r * c.r && c.top > y + 0.8 && (best === null || c.top > best)) best = c.top; }
+  return best;
+}
 function insideBox(x: number, z: number, pad: number, y?: number): boolean {
-  for (let i = 0; i < boxes.length; i++) { const b = boxes[i]; if (y !== undefined && b.top !== undefined && y >= b.top) continue; if (b.on && x > b.x0 - pad && x < b.x1 + pad && z > b.z0 - pad && z < b.z1 + pad) return true; }
+  for (let i = 0; i < boxes.length; i++) { const b = boxes[i]; if (b.pass) continue; if (y !== undefined) { const bt = boxTop(b, x, z); if (bt !== undefined && y >= bt) continue; } if (b.on && x > b.x0 - pad && x < b.x1 + pad && z > b.z0 - pad && z < b.z1 + pad) return true; }
   return false;
 }
 

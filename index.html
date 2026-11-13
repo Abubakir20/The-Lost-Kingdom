@@ -607,6 +607,8 @@ sun.shadow.radius = 2.5;
 const circles = [], boxes = [];
 const addCircle = (x, z, r, top) => { const c = { x, z, r, on: true, top }; circles.push(c); return c; }; // top: world height of a surface you can stand on
 const addBox = (x0, x1, z0, z1, top) => { const b = { x0: Math.min(x0, x1), x1: Math.max(x0, x1), z0: Math.min(z0, z1), z1: Math.max(z0, z1), on: true, top }; boxes.push(b); return b; };
+/* the height of a box's top at a point: flat, or shaped like a roof */
+const boxTop = (b, x, z) => b.surf ? b.surf(clamp(x, b.x0, b.x1), clamp(z, b.z0, b.z1)) : b.top;
 let hitTop = null; // lowest standable top touched by the last resolveCollide that was given a height
 function resolveCollide(p, r, y) {
     hitTop = null;
@@ -629,13 +631,14 @@ function resolveCollide(p, r, y) {
     }
     for (let i = 0; i < boxes.length; i++) {
         const b = boxes[i];
-        if (!b.on)
-            continue;
-        if (y !== undefined && b.top !== undefined && y >= b.top - 0.3)
+        if (!b.on || b.pass)
             continue;
         if (p.x > b.x0 - r && p.x < b.x1 + r && p.z > b.z0 - r && p.z < b.z1 + r) {
-            if (b.top !== undefined && (hitTop === null || b.top < hitTop))
-                hitTop = b.top;
+            const bt = boxTop(b, p.x, p.z);
+            if (y !== undefined && bt !== undefined && y >= bt - 0.3)
+                continue;
+            if (bt !== undefined && (hitTop === null || bt < hitTop))
+                hitTop = bt;
             const pl = p.x - (b.x0 - r), pr = (b.x1 + r) - p.x, pn = p.z - (b.z0 - r), pf = (b.z1 + r) - p.z, m = Math.min(pl, pr, pn, pf);
             if (m === pl)
                 p.x = b.x0 - r;
@@ -662,18 +665,50 @@ function platformAt(x, z, y) {
     }
     for (let i = 0; i < boxes.length; i++) {
         const b = boxes[i];
-        if (b.top === undefined || !b.on || b.top > y + 0.35 || b.top <= h)
+        if ((b.top === undefined && !b.surf) || !b.on)
             continue;
-        if (x > b.x0 - pad && x < b.x1 + pad && z > b.z0 - pad && z < b.z1 + pad)
-            h = b.top;
+        if (!(x > b.x0 - pad && x < b.x1 + pad && z > b.z0 - pad && z < b.z1 + pad))
+            continue;
+        const t = boxTop(b, x, z);
+        if (t > y + 0.35 || t <= h)
+            continue;
+        h = t;
     }
     return h;
+}
+/* the top of a climbable wall in front of you, if it is higher than a step: boxes with a top (or a roof), round things with a top */
+function climbTop(x, z, y) {
+    let best = null;
+    for (let i = 0; i < boxes.length; i++) {
+        const b = boxes[i];
+        if (!b.on || b.pass || (b.top === undefined && !b.surf))
+            continue;
+        if (x > b.x0 && x < b.x1 && z > b.z0 && z < b.z1) {
+            const t = boxTop(b, x, z);
+            if (t > y + 0.8 && (best === null || t > best))
+                best = t;
+        }
+    }
+    for (let i = 0; i < circles.length; i++) {
+        const c = circles[i];
+        if (!c.on || c.top === undefined)
+            continue;
+        const dx = x - c.x, dz = z - c.z;
+        if (dx * dx + dz * dz < c.r * c.r && c.top > y + 0.8 && (best === null || c.top > best))
+            best = c.top;
+    }
+    return best;
 }
 function insideBox(x, z, pad, y) {
     for (let i = 0; i < boxes.length; i++) {
         const b = boxes[i];
-        if (y !== undefined && b.top !== undefined && y >= b.top)
+        if (b.pass)
             continue;
+        if (y !== undefined) {
+            const bt = boxTop(b, x, z);
+            if (bt !== undefined && y >= bt)
+                continue;
+        }
         if (b.on && x > b.x0 - pad && x < b.x1 + pad && z > b.z0 - pad && z < b.z1 + pad)
             return true;
     }
@@ -2169,7 +2204,7 @@ function pillar(x, z, h, r = 0.6, collide = true, broken) {
             mesh(sph(0.22, 6, 5), lam(VINE), r * 0.8, 0.62 + h * 0.3, -r * 0.55, g, true);
         }
         if (collide)
-            addCircle(x, z, r * 1.25);
+            addCircle(x, z, r * 1.25, g.position.y + 0.62 + h + (broken ? 0 : 0.42 * r));
         return g;
     }
     mesh(bx(r * 3.1, 0.3, r * 3.1), lam(STONE_D), 0, 0.15, 0, g);
@@ -2194,7 +2229,7 @@ function pillar(x, z, h, r = 0.6, collide = true, broken) {
     v.rotation.z = 0.08;
     mesh(sph(0.22, 6, 5), lam(VINE), r * 0.8, 0.62 + h * 0.3, -r * 0.55, g, true);
     if (collide)
-        addCircle(x, z, r * 1.25);
+        addCircle(x, z, r * 1.25, g.position.y + (broken ? 0.62 + h : 1.27 + h));
     return g;
 }
 /* the arch, the wall course and its merlon, sculpted in Blender as dressed, coursed stone with baked occlusion and moss */
@@ -2435,7 +2470,13 @@ function house(x, z, w, d, roofC, dz, o = {}) {
         mesh(bx(0.7, 0.55, 0.06), lam(0xb88a54), 0, -0.1, 0.05, sg, true);
         mesh(sph(0.14, 6, 5), lam(o.sign), 0, -0.1, 0.09, sg, true);
     }
-    addBox(x - w / 2, x + w / 2, z - d / 2, z + d / 2);
+    /* the roof can be stood on: its height falls away from the ridge (which runs along z) to the eaves */
+    const gy = y - 0.1, ridgeY = gy + top + rh + 0.35, k = rh / (uw / 2), roofAt = (px) => ridgeY - Math.abs(px - x) * k;
+    const wall = addBox(x - w / 2, x + w / 2, z - d / 2, z + d / 2);
+    wall.surf = (px) => roofAt(px);
+    const eave = addBox(x - half, x + half, z - (ud + 1.5) / 2, z + (ud + 1.5) / 2);
+    eave.surf = (px) => roofAt(px);
+    eave.pass = true;
     return g;
 }
 /* ---------- shrine of awakening ---------- */
@@ -3184,7 +3225,7 @@ function paved(x, z) {
     for (let k = 0; k < 5; k++)
         mesh(sph(0.34 + (k % 2) * 0.12, 6, 5), lam(k % 2 ? VINE : MOSS), 2.02, 1 + k * 0.7, -1.2 + (k % 3) * 0.5, tg, true).scale.x = 0.4;
     halo(scene, tx, y + 12.9, tz, 5, 0xffc56a, 0.6, true);
-    addBox(tx - 2.3, tx + 2.3, tz - 2.3, tz + 2.3);
+    addBox(tx - 2.3, tx + 2.3, tz - 2.3, tz + 2.3, y + 11.42); // the windmill's balcony can be reached
     // low stone walls flanking the west gate
     const wallArc = (a0, a1) => { const R = 30.5, n = Math.round(Math.abs(a1 - a0) * R / 1.5); for (let i = 0; i <= n; i++) {
         const a = lerp(a0, a1, i / n), wx = V.x + Math.cos(a) * R, wz = V.z + Math.sin(a) * R, wy = groundAt(wx, wz);
@@ -3815,7 +3856,7 @@ const PL = {
     atk: null, hold: -1, draw: -1, blocking: false, rollT: 0, rollDir: new T.Vector3(), iframes: 0, hurtT: 0, emberCd: 0, stDelay: 0, airT: 0, animT: 0,
     lock: null, dead: false, moving: 0, sprint: false, step: 0, combo: 0, comboT: 0, queued: false, spin: 0,
     castT: 0, pushing: 0, landT: 0, vaultT: 0, rollBack: false, glideArm: false, chargeFx: false,
-    landRoll: false, skidT: 0, mantleT: 0, wasClimb: false, climbT: 0, landHard: 0,
+    landRoll: false, skidT: 0, mantleT: 0, wasClimb: false, climbT: 0, landHard: 0, wallT: 0,
 };
 const CAM = { yaw: 0, pitch: 0.32, dist: 7.2, shake: 0, cur: new T.Vector3(0, 8, 76) };
 const keys = {}, mouse = { l: false, r: false };
@@ -4270,10 +4311,44 @@ function updatePlayer(dt) {
         p.pos.x *= LIMIT / dl;
         p.pos.z *= LIMIT / dl;
     }
+    /* climbing walls of things you can stand on top of: houses, the windmill, columns, stalls. Push into the wall to
+       go up (it costs stamina); at the top you step over onto it; let go and you drop. */
+    let wc = false;
+    if (!p.swim && !p.dead && mag > 0 && p.rollT <= 0 && !p.atk && (p.grounded || (p.wallT || 0) > 0) && S.st > 0 && !inCave(p.pos.x) && !inTemple(p.pos.x, p.pos.z, 2)) {
+        const fx = p.pos.x + dx * 0.8, fz = p.pos.z + dz * 0.8, ct = climbTop(fx, fz, p.pos.y);
+        if (ct !== null && ct - p.pos.y < 16) {
+            wc = true;
+            p.climb = true;
+            p.wallT = 0.25;
+            useStamina(14 * dt);
+            p.vel.set(0, 0, 0);
+            p.yaw = angLerp(p.yaw, Math.atan2(dx, dz), 10 * dt);
+            if (ct - p.pos.y <= 0.9) {
+                p.pos.x = fx;
+                p.pos.z = fz;
+                p.pos.y = ct;
+                p.grounded = true;
+                p.mantleT = 0.34;
+                p.wallT = 0;
+                wc = false;
+                sfx('step');
+            }
+            else {
+                p.pos.y += 2.6 * dt;
+                p.grounded = false;
+                p.airT = 0;
+            }
+        }
+    }
+    if ((p.wallT || 0) > 0 && !wc)
+        p.wallT -= dt;
     // vertical
     const wl = waterAt(p.pos.x), g = floorAt(p.pos.x, p.pos.z, p.pos.y), plat = platformAt(p.pos.x, p.pos.z, p.pos.y), surf = Math.max(g, wl - 0.95, plat), deep = g < wl - 0.95 && plat < wl - 0.95;
     p.glide = false;
-    if (p.grounded) {
+    if (wc) {
+        p.vel.y = 0;
+    }
+    else if (p.grounded) {
         if (surf < p.pos.y - 0.7) {
             p.grounded = false;
             p.vel.y = 0;
@@ -7329,8 +7404,11 @@ function solidAt(x, y, z) {
     if (inCave(x) && y > caveCeil(x, z) - 0.05)
         return true;
     for (const b of _near.b)
-        if (x > b.x0 && x < b.x1 && z > b.z0 && z < b.z1 && y < (b.top !== undefined ? b.top : 11))
-            return true;
+        if (x > b.x0 && x < b.x1 && z > b.z0 && z < b.z1) {
+            const bt = boxTop(b, x, z);
+            if (y < (bt !== undefined ? bt : 11))
+                return true;
+        }
     for (const c of _near.c)
         if ((x - c.x) * (x - c.x) + (z - c.z) * (z - c.z) < c.r * c.r && y < (c.top !== undefined ? c.top : 7))
             return true;
@@ -7412,12 +7490,23 @@ function aimHook() {
     if (Math.abs(g - P.y) < 0.45 && sl < 0.9 && !solidAt(P.x, g + 1.8, P.z))
         AIM.land = [P.x, g, P.z];
     else {
-        for (const b of _near.b)
-            if (b.top !== undefined && P.x > b.x0 - 0.1 && P.x < b.x1 + 0.1 && P.z > b.z0 - 0.1 && P.z < b.z1 + 0.1 && P.y > b.top - 0.45)
-                AIM.land = [P.x, b.top, P.z];
+        for (const b of _near.b) {
+            const bt = boxTop(b, P.x, P.z);
+            if (bt !== undefined && P.x > b.x0 - 0.1 && P.x < b.x1 + 0.1 && P.z > b.z0 - 0.1 && P.z < b.z1 + 0.1 && P.y > bt - 0.45)
+                AIM.land = [P.x, bt, P.z];
+        }
         for (const c of _near.c)
             if (c.top !== undefined && Math.hypot(P.x - c.x, P.z - c.z) < c.r + 0.1 && P.y > c.top - 0.45)
                 AIM.land = [P.x, c.top, P.z];
+    }
+    /* a wall with its top close above the bite: pull up and over onto it (a roof, a balcony, a ledge) */
+    if (!AIM.land) {
+        const ix = P.x + _aimD.x * 0.6 / Math.max(0.2, Math.hypot(_aimD.x, _aimD.z)), iz = P.z + _aimD.z * 0.6 / Math.max(0.2, Math.hypot(_aimD.x, _aimD.z));
+        const ct = inCave(ix) ? null : climbTop(ix, iz, P.y - 0.85), tg = terrainH(ix, iz);
+        if (ct !== null && ct - P.y < 2.6 && !solidAt(ix, ct + 1.8, iz))
+            AIM.land = [ix, ct, iz];
+        else if (tg > P.y && tg - P.y < 2.6 && !solidAt(ix, tg + 1.8, iz))
+            AIM.land = [ix, tg, iz];
     }
     AIM.hangs = !AIM.land && solidAt(P.x, P.y + 0.35, P.z) && !solidAt(P.x, P.y - 2.2, P.z);
     AIM.ok = true;
@@ -7552,6 +7641,7 @@ function hookDrive(dt) {
                 p.airT = 0;
                 p.vel.set(HOOK.dir.x * 4, 6.5, HOOK.dir.z * 4);
                 p.glideArm = false;
+                p.wallT = 0.6; // hold W to cling and climb
             }
         }
         return true;

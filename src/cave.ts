@@ -159,7 +159,7 @@ const _aimD = new T.Vector3(), _aimO = new T.Vector3(), _near: { b: BoxCollider[
 function solidAt(x: number, y: number, z: number) {
   if (terrainH(x, z) > y) return true;
   if (inCave(x) && y > caveCeil(x, z) - 0.05) return true;
-  for (const b of _near.b) if (x > b.x0 && x < b.x1 && z > b.z0 && z < b.z1 && y < (b.top !== undefined ? b.top : 11)) return true;
+  for (const b of _near.b) if (x > b.x0 && x < b.x1 && z > b.z0 && z < b.z1) { const bt = boxTop(b, x, z); if (y < (bt !== undefined ? bt : 11)) return true; }
   for (const c of _near.c) if ((x - c.x) * (x - c.x) + (z - c.z) * (z - c.z) < c.r * c.r && y < (c.top !== undefined ? c.top : 7)) return true;
   return false;
 }
@@ -198,8 +198,15 @@ function aimHook() {
   /* what kind of surface: the top of something (land on it), the underside of something (hang), or a wall (fly at it) */
   const g = terrainH(P.x, P.z), sl = Math.max(Math.abs(terrainH(P.x + 0.8, P.z) - g), Math.abs(terrainH(P.x, P.z + 0.8) - g)) / 0.8;
   if (Math.abs(g - P.y) < 0.45 && sl < 0.9 && !solidAt(P.x, g + 1.8, P.z)) AIM.land = [P.x, g, P.z];
-  else { for (const b of _near.b) if (b.top !== undefined && P.x > b.x0 - 0.1 && P.x < b.x1 + 0.1 && P.z > b.z0 - 0.1 && P.z < b.z1 + 0.1 && P.y > b.top - 0.45) AIM.land = [P.x, b.top, P.z];
+  else { for (const b of _near.b) { const bt = boxTop(b, P.x, P.z); if (bt !== undefined && P.x > b.x0 - 0.1 && P.x < b.x1 + 0.1 && P.z > b.z0 - 0.1 && P.z < b.z1 + 0.1 && P.y > bt - 0.45) AIM.land = [P.x, bt, P.z]; }
     for (const c of _near.c) if (c.top !== undefined && Math.hypot(P.x - c.x, P.z - c.z) < c.r + 0.1 && P.y > c.top - 0.45) AIM.land = [P.x, c.top, P.z]; }
+  /* a wall with its top close above the bite: pull up and over onto it (a roof, a balcony, a ledge) */
+  if (!AIM.land) {
+    const ix = P.x + _aimD.x * 0.6 / Math.max(0.2, Math.hypot(_aimD.x, _aimD.z)), iz = P.z + _aimD.z * 0.6 / Math.max(0.2, Math.hypot(_aimD.x, _aimD.z));
+    const ct = inCave(ix) ? null : climbTop(ix, iz, P.y - 0.85), tg = terrainH(ix, iz);
+    if (ct !== null && ct - P.y < 2.6 && !solidAt(ix, ct + 1.8, iz)) AIM.land = [ix, ct, iz];
+    else if (tg > P.y && tg - P.y < 2.6 && !solidAt(ix, tg + 1.8, iz)) AIM.land = [ix, tg, iz];
+  }
   AIM.hangs = !AIM.land && solidAt(P.x, P.y + 0.35, P.z) && !solidAt(P.x, P.y - 2.2, P.z);
   AIM.ok = true; return AIM;
 }
@@ -258,7 +265,7 @@ function hookDrive(dt: number): boolean {
       else if (r || HOOK.hangs) { HOOK.state = 'hang'; HOOK.t = 0; HOOK.last = r; if (!G.flags.hangHint) { G.flags.hangHint = true; notify('Hanging. Aim and press G to swing on, or Space to let go.'); } }
       else { /* thrown at a wall: the rope lets go and you carry on, up and in */
         HOOK.state = 'none'; HOOK.ring = null; ropeMesh.visible = hookHead.visible = false;
-        p.grounded = false; p.airT = 0; p.vel.set(HOOK.dir.x * 4, 6.5, HOOK.dir.z * 4); p.glideArm = false;
+        p.grounded = false; p.airT = 0; p.vel.set(HOOK.dir.x * 4, 6.5, HOOK.dir.z * 4); p.glideArm = false; p.wallT = 0.6;   // hold W to cling and climb
       }
     }
     return true;

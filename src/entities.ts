@@ -221,7 +221,7 @@ const PL = {
   atk: null as AttackState | null, hold: -1, draw: -1, blocking: false, rollT: 0, rollDir: new T.Vector3(), iframes: 0, hurtT: 0, emberCd: 0, stDelay: 0, airT: 0, animT: 0,
   lock: null as Enemy | null, dead: false, moving: 0, sprint: false, step: 0, combo: 0, comboT: 0, queued: false, spin: 0,
   castT: 0, pushing: 0, landT: 0, vaultT: 0, rollBack: false, glideArm: false, chargeFx: false,
-  landRoll: false, skidT: 0, mantleT: 0, wasClimb: false, climbT: 0, landHard: 0,
+  landRoll: false, skidT: 0, mantleT: 0, wasClimb: false, climbT: 0, landHard: 0, wallT: 0,
 };
 const CAM = { yaw: 0, pitch: 0.32, dist: 7.2, shake: 0, cur: new T.Vector3(0, 8, 76) };
 const keys: Record<string, boolean> = {}, mouse = { l: false, r: false };
@@ -408,10 +408,23 @@ function updatePlayer(dt: number) {
   p.vaultT = (p.vaultT || 0) - dt;
   if (hitTop !== null && !p.grounded && mag > 0 && p.rollT <= 0 && hitTop - p.pos.y < 1.35 && p.vel.y > -9) { const need = Math.sqrt(2 * 27 * (hitTop - p.pos.y + 0.3)); if (p.vel.y < need) { if (p.vaultT <= 0) sfx('step'); p.vel.y = need; p.vaultT = 0.28; p.glideArm = false; } }
   const dl = Math.hypot(p.pos.x, p.pos.z); if (dl > LIMIT && !inCave(p.pos.x)) { p.pos.x *= LIMIT / dl; p.pos.z *= LIMIT / dl; }
+  /* climbing walls of things you can stand on top of: houses, the windmill, columns, stalls. Push into the wall to
+     go up (it costs stamina); at the top you step over onto it; let go and you drop. */
+  let wc = false;
+  if (!p.swim && !p.dead && mag > 0 && p.rollT <= 0 && !p.atk && (p.grounded || (p.wallT || 0) > 0) && S.st > 0 && !inCave(p.pos.x) && !inTemple(p.pos.x, p.pos.z, 2)) {
+    const fx = p.pos.x + dx * 0.8, fz = p.pos.z + dz * 0.8, ct = climbTop(fx, fz, p.pos.y);
+    if (ct !== null && ct - p.pos.y < 16) {
+      wc = true; p.climb = true; p.wallT = 0.25; useStamina(14 * dt); p.vel.set(0, 0, 0); p.yaw = angLerp(p.yaw, Math.atan2(dx, dz), 10 * dt);
+      if (ct - p.pos.y <= 0.9) { p.pos.x = fx; p.pos.z = fz; p.pos.y = ct; p.grounded = true; p.mantleT = 0.34; p.wallT = 0; wc = false; sfx('step'); }
+      else { p.pos.y += 2.6 * dt; p.grounded = false; p.airT = 0; }
+    }
+  }
+  if ((p.wallT || 0) > 0 && !wc) p.wallT -= dt;
   // vertical
   const wl = waterAt(p.pos.x), g = floorAt(p.pos.x, p.pos.z, p.pos.y), plat = platformAt(p.pos.x, p.pos.z, p.pos.y), surf = Math.max(g, wl - 0.95, plat), deep = g < wl - 0.95 && plat < wl - 0.95;
   p.glide = false;
-  if (p.grounded) {
+  if (wc) { p.vel.y = 0; }
+  else if (p.grounded) {
     if (surf < p.pos.y - 0.7) { p.grounded = false; p.vel.y = 0; p.airT = 0; }
     else p.pos.y = surf;
   } else {

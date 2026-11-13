@@ -58,7 +58,7 @@ function pillar(x: number, z: number, h: number, r = 0.6, collide = true, broken
     mesh(bx(0.07, Math.min(1.6, h * 0.45), 0.05), glowMat(RUNE), 0, 0.62 + h * 0.5, R * 1.04, g, true);
     if (IVY_MAT) { const a = Math.atan2(0.83, -0.55); ivy(g, Math.sin(a) * (R + 0.02), 0.62 + h * (broken ? 0.95 : 1.0), Math.cos(a) * (R + 0.02), a, h * 0.75, R * 1.3, Math.round(x * 13 + z * 7)); }
     else { const v = mesh(cyl(0.04, 0.05, h * 0.7, 4), lam(VINE), r * 0.75, 0.62 + h * 0.62, -r * 0.5, g, true); v.rotation.z = 0.08; mesh(sph(0.22, 6, 5), lam(VINE), r * 0.8, 0.62 + h * 0.3, -r * 0.55, g, true); }
-    if (collide) addCircle(x, z, r * 1.25);
+    if (collide) addCircle(x, z, r * 1.25, g.position.y + 0.62 + h + (broken ? 0 : 0.42 * r));
     return g;
   }
   mesh(bx(r * 3.1, 0.3, r * 3.1), lam(STONE_D), 0, 0.15, 0, g); mesh(bx(r * 2.5, 0.32, r * 2.5), lam(STONE), 0, 0.46, 0, g);
@@ -69,7 +69,7 @@ function pillar(x: number, z: number, h: number, r = 0.6, collide = true, broken
   mesh(bx(0.07, Math.min(1.6, h * 0.45), 0.05), glowMat(RUNE), 0, 0.62 + h * 0.5, r * 0.95, g, true);
   const v = mesh(cyl(0.04, 0.05, h * 0.7, 4), lam(VINE), r * 0.75, 0.62 + h * 0.62, -r * 0.5, g, true); v.rotation.z = 0.08;
   mesh(sph(0.22, 6, 5), lam(VINE), r * 0.8, 0.62 + h * 0.3, -r * 0.55, g, true);
-  if (collide) addCircle(x, z, r * 1.25);
+  if (collide) addCircle(x, z, r * 1.25, g.position.y + (broken ? 0.62 + h : 1.27 + h));
   return g;
 }
 /* the arch, the wall course and its merlon, sculpted in Blender as dressed, coursed stone with baked occlusion and moss */
@@ -193,7 +193,10 @@ function house(x: number, z: number, w: number, d: number, roofC: number, dz: nu
   // ivy up one corner
   for (let k = 0; k < 6; k++) mesh(sph(0.3 + (k % 3) * 0.1, 6, 5), lam(k % 2 ? VINE : MOSS), -w / 2 + 0.1 + (k % 2) * 0.4, f + 0.3 + k * 0.5, dz * (d / 2 + 0.05), g, true).scale.z = 0.4;
   if (o.sign) { const sg = grpAt(-w * 0.36, f + 2.5, dz * (d / 2 + 0.5), ry, g); mesh(bx(0.08, 0.08, 1), beam, 0, 0.3, -0.3, sg, true); mesh(bx(0.7, 0.55, 0.06), lam(0xb88a54), 0, -0.1, 0.05, sg, true); mesh(sph(0.14, 6, 5), lam(o.sign), 0, -0.1, 0.09, sg, true); }
-  addBox(x - w / 2, x + w / 2, z - d / 2, z + d / 2);
+  /* the roof can be stood on: its height falls away from the ridge (which runs along z) to the eaves */
+  const gy = y - 0.1, ridgeY = gy + top + rh + 0.35, k = rh / (uw / 2), roofAt = (px: number) => ridgeY - Math.abs(px - x) * k;
+  const wall = addBox(x - w / 2, x + w / 2, z - d / 2, z + d / 2); wall.surf = (px: number) => roofAt(px);
+  const eave = addBox(x - half, x + half, z - (ud + 1.5) / 2, z + (ud + 1.5) / 2); eave.surf = (px: number) => roofAt(px); eave.pass = true;
   return g;
 }
 
@@ -515,7 +518,7 @@ function paved(x: number, z: number) {
   { const cf = mesh(cyl(1.05, 1.05, 0.14, 20), lam(0xf2ead8), -2.06, 9.3, 0, tg); cf.rotation.z = Math.PI / 2; const rim = mesh(new T.TorusGeometry(1.05, 0.09, 5, 24), lam(GOLD), -2.12, 9.3, 0, tg); rim.rotation.y = Math.PI / 2; mesh(bx(0.06, 0.8, 0.08), lam(0x2e2a1f), -2.16, 9.6, 0, tg, true); mesh(bx(0.06, 0.08, 0.55), lam(0x2e2a1f), -2.16, 9.3, 0.25, tg, true); }
   for (let k = 0; k < 5; k++) mesh(sph(0.34 + (k % 2) * 0.12, 6, 5), lam(k % 2 ? VINE : MOSS), 2.02, 1 + k * 0.7, -1.2 + (k % 3) * 0.5, tg, true).scale.x = 0.4;
   halo(scene, tx, y + 12.9, tz, 5, 0xffc56a, 0.6, true);
-  addBox(tx - 2.3, tx + 2.3, tz - 2.3, tz + 2.3);
+  addBox(tx - 2.3, tx + 2.3, tz - 2.3, tz + 2.3, y + 11.42);   // the windmill's balcony can be reached
 
   // low stone walls flanking the west gate
   const wallArc = (a0: number, a1: number) => { const R = 30.5, n = Math.round(Math.abs(a1 - a0) * R / 1.5); for (let i = 0; i <= n; i++) { const a = lerp(a0, a1, i / n), wx = V.x + Math.cos(a) * R, wz = V.z + Math.sin(a) * R, wy = groundAt(wx, wz); const b = mesh(bx(0.7, 0.95 + vr() * 0.25, 1.7), i % 2 ? st : sd, wx, wy + 0.45, wz, g); b.rotation.y = -a; if (i % 3 === 0) mesh(bx(0.85, 0.14, 1.2), lam(MOSS), wx, wy + 1.0, wz, g, true).rotation.y = -a; addCircle(wx, wz, 0.62); } };

@@ -77,6 +77,11 @@ const { open } = require('./shot.js');
   await ev('window._y0=PL.pos.y;fireHook()'); await frames(60); chk('free hook reels you up to the cliff', await ev('return PL.pos.y>_y0+3&&PL.pos.z<-78'));
   await ev('hookRelease();placePlayer(MESA.x,MESA.z);CAM.yaw=0;CAM.pitch=-0.55;updateCamera(0.016,true)'); await frames(2); chk('nothing to bite in open sky', await ev('return !aimHook().ok'));
   await ev('G.p.hp=G.p.maxHp');
+  // houses can be climbed and their roofs walked on
+  await ev('hookRelease();placePlayer(57,5);PL.yaw=Math.PI/2;CAM.yaw=-Math.PI/2;keys.KeyW=true'); let roofed = false, climbed2 = false;
+  for (let i = 0; i < 20; i++) { await ev('G.p.st=G.p.maxSt'); await frames(10); if (await ev('return PL.climb')) climbed2 = true; if (await ev('return PL.grounded&&PL.pos.y>7')) roofed = true; }
+  await ev('keys.KeyW=false'); chk('climbs a house wall', climbed2); chk('stands on the roof', roofed);
+  await ev('G.p.hp=G.p.maxHp');
   // swimming under the stone bridge stays in the water; the deck above is still walkable
   await ev('placePlayer(BRIDGE.x+3.5,2);CAM.yaw=Math.PI;keys.KeyW=true;G.p.st=G.p.maxSt;window._uy=-9'); for (let i = 0; i < 24; i++) { await frames(10); await ev('G.p.st=G.p.maxSt;if(onBridge(PL.pos.x,PL.pos.z))_uy=Math.max(_uy,PL.pos.y)'); }
   await ev('keys.KeyW=false'); chk('swims under the bridge', await ev('return _uy>-9&&_uy<-1.5&&PL.pos.z>BRIDGE.z+BRIDGE.w'));

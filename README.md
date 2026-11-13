@@ -26,6 +26,7 @@ An original 3D open-world fantasy adventure that runs in the browser. One self-c
 | 1 / 2 / 3 | Sword / bow / healing draught |
 | Q, F, R | Ember spell, dodge, lock on |
 | E | Interact |
+| W into a wall | Climb houses, the windmill, columns and rocks (costs stamina) |
 | G (or middle mouse) | Grappling hook, once found: fires wherever the crosshair points (rock, wood, roofs, rings) and reels you in; hanging, G again to swing on, Space to let go |
 | Tab | Pack |
 

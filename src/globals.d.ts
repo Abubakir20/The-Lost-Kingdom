@@ -41,7 +41,9 @@ interface Hero extends Humanoid {
 type CreatureRig = Record<string, any>;
 
 interface CircleCollider { x: number; z: number; r: number; on: boolean; /** world height of a surface you can stand on */ top?: number }
-interface BoxCollider { x0: number; x1: number; z0: number; z1: number; on: boolean; top?: number }
+interface BoxCollider { x0: number; x1: number; z0: number; z1: number; on: boolean; top?: number;
+  /** a shaped top (a pitched roof): its height at a point, in place of top */ surf?: (x: number, z: number) => number;
+  /** something only to stand on (eaves): never stops anyone walking */ pass?: boolean }
 
 interface PlayerStats {
   x: number; y: number; z: number; yaw: number; hp: number; maxHp: number; st: number; maxSt: number; mp: number; maxMp: number;

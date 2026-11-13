@@ -26,6 +26,7 @@ An original 3D open-world fantasy adventure that runs in the browser. One self-c
 | 1 / 2 / 3 | Sword / bow / healing draught |
 | Q, F, R | Ember spell, dodge, lock on |
 | E | Interact |
+| G (or middle mouse) | Grappling hook, once found: fire at a glowing ring; from a hanging ring, G again at the next, Space to let go |
 | Tab | Pack |
 
 ## Project layout
@@ -41,6 +42,7 @@ src/
   scenery.ts      village, temple, props
   entities.ts     characters, hero, weapons, camera, combat, enemies, boss
   systems.ts      quests, NPCs, shop, crafting
+  cave.ts         the Veilfall grotto behind the waterfall: grappling hook, cave bats, the vault golem
   ui.ts           HUD and panels
   main.ts         input and the frame loop
   template.html   page shell and styles

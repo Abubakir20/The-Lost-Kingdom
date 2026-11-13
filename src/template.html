@@ -72,6 +72,8 @@ h1,h2,h3,h4{font-family:var(--display);font-weight:400;margin:0}
 .slot.on{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset,0 0 14px rgba(232,195,106,.35);transform:translateY(-5px)} .slot.locked{display:none} .slot.cool{opacity:.45}
 .purse{position:absolute;left:22px;bottom:20px;background:var(--glass);border:1px solid rgba(246,236,210,.3);padding:.2em .9em .2em .5em;font-size:.95rem;border-radius:16px;display:flex;align-items:center;gap:.4em}
 .purse svg{width:18px;height:18px} .purse b{color:var(--gold);font-weight:600}
+#hookMark{position:absolute;left:0;top:0;width:40px;height:40px;margin:-20px 0 0 -20px;border:2px solid #ffe7a0;border-radius:50%;box-shadow:0 0 12px rgba(255,220,120,.8),inset 0 0 8px rgba(255,220,120,.5);display:none;pointer-events:none;z-index:4}
+#hookMark b{position:absolute;left:50%;top:-24px;transform:translateX(-50%);font:700 13px/1 system-ui,sans-serif;color:#2a2010;background:#ffe7a0;border-radius:4px;padding:3px 6px}
 #bossBar{position:absolute;left:50%;top:24px;transform:translateX(-50%);width:min(560px,48vw);display:none;text-align:center}
 #bossName{font-family:var(--display);font-size:1.2rem;letter-spacing:.08em;margin-bottom:6px}
 .bbar{height:14px;background:rgba(11,36,40,.85);border:1px solid var(--gold);position:relative;transform:skewX(-20deg)}
@@ -205,6 +207,7 @@ body.cine .lbox{transform:none} body.cine #hud>*:not(#banner){opacity:0;transiti
     <div class="slot" id="slotPot"><kbd>3</kbd><svg viewBox="0 0 24 24" fill="#e2603a"><path d="M9 2h6v2l-1 1v4l4.5 7.5A3 3 0 0 1 15.9 21H8.1a3 3 0 0 1-2.6-4.5L10 9V5L9 4z"/></svg><small id="potN">0</small></div>
     <div class="slot" id="slotEmber"><kbd>Q</kbd><svg viewBox="0 0 24 24" fill="#f0703a"><path d="M12 2c1 5 6.5 6 6.5 12a6.5 6.5 0 0 1-13 0c0-3 2-4 2-7 2 1 3.5 2 4.5-5z"/><path d="M12 12c1 2 3 3 3 5a3 3 0 0 1-6 0c0-2 2-2 3-5z" fill="#ffe08a"/></svg></div>
   </div>
+  <div id="hookMark"><b>G</b></div>
   <div id="bossBar"><div id="bossName">The Ancient Forest Guardian</div><div class="bbar"><i id="bossFill"></i></div></div>
   <div id="banner"><div id="bannerT"></div><div id="bannerS"></div></div>
   <div id="cross"></div>

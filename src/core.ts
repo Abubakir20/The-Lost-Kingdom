@@ -28,7 +28,50 @@ const ISLETS = [
   { x: riverX(-80), z: -80, h: -0.55, r: 2.6, b: 4 },   // drowned islet
   { x: -25, z: -164, h: -0.5, r: 4.5, b: 4 },           // hollow behind the waterfall
 ];
+/* ---------- the Veilfall grotto: an enclosed cave laid out beyond the valley's edge (x > 280), reached through the
+   cave mouth behind the waterfall. Its floor is a heightfield of its own: rooms and ledges cut out of solid rock,
+   with chasms that drop away into the dark. ---------- */
+const CAVE = { x0: 284, x1: 392, z0: -54, z1: 18, wall: 26, pit: -40 };
+const inCave = (x: number, z?: number) => x > CAVE.x0 - 4;
+type CaveShape = { k: 'c' | 'r' | 'p'; a: number; b: number; c: number; d: number; e: number; f: number };
+/* k: c = circle (a,b centre, c radius), r = rounded rect (a,b)-(c,d), p = capsule (a,b)-(c,d) half-width e; f = floor height */
+const CAVE_FLOORS: CaveShape[] = [
+  { k: 'c', a: 304, b: 0, c: 7.5, d: 0, e: 0, f: 0 },          // the grotto behind the falls
+  { k: 'p', a: 309, b: 0, c: 321, d: 0.5, e: 2.4, f: 0 },      // a low passage
+  { k: 'c', a: 327.5, b: 0, c: 8.5, d: 0, e: 0, f: 0 },        // the bat hall
+  { k: 'c', a: 327.5, b: 8.6, c: 2.9, d: 0, e: 0, f: 0 },      // the alcove with the hook
+  { k: 'p', a: 334, b: 0, c: 339.6, d: 0, e: 2.6, f: 0 },      // the lip of the first chasm
+  { k: 'r', a: 339, b: -4.6, c: 359.5, d: 4.6, e: 0, f: 0 },   // across it, a shelf under a cliff
+  { k: 'r', a: 348, b: -15, c: 360, d: -3.6, e: 0, f: 7 },     // the upper ledge
+  { k: 'r', a: 348, b: -33.5, c: 360, d: -14.5, e: 0, f: 7 },  // (cut away below: the long drop)
+  { k: 'r', a: 348, b: -41, c: 360, d: -33, e: 0, f: 7 },      // the far ledge
+  { k: 'r', a: 359, b: -39.5, c: 364, d: -34.5, e: 0, f: 7 },  // (cut away below: the gap the slab bridges)
+  { k: 'c', a: 374, b: -37, c: 11.5, d: 0, e: 0, f: 7 },       // the vault where the golem waits
+];
+const CAVE_PITS: CaveShape[] = [
+  { k: 'r', a: 339.7, b: -5, c: 347.4, d: 5, e: 0, f: 0 },
+  { k: 'r', a: 347.6, b: -33.1, c: 360.4, d: -15.2, e: 0, f: 0 },
+  { k: 'r', a: 360.1, b: -40, c: 363.3, d: -34, e: 0, f: 0 },
+];
+function caveSd(s: CaveShape, x: number, z: number) {
+  if (s.k === 'c') return Math.hypot(x - s.a, z - s.b) - s.c;
+  if (s.k === 'r') { const cx = (s.a + s.c) / 2, cz = (s.b + s.d) / 2, hx = (s.c - s.a) / 2, hz = (s.d - s.b) / 2, qx = Math.abs(x - cx) - hx, qz = Math.abs(z - cz) - hz; return Math.hypot(Math.max(qx, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, qz), 0); }
+  const vx = s.c - s.a, vz = s.d - s.b, t = clamp(((x - s.a) * vx + (z - s.b) * vz) / (vx * vx + vz * vz), 0, 1); return Math.hypot(x - s.a - vx * t, z - s.b - vz * t) - s.e;
+}
+const caveNoise = (x: number, z: number) => Math.sin(x * 0.71 + Math.sin(z * 0.43) * 2.1) * Math.cos(z * 0.67 + Math.sin(x * 0.29) * 1.7);
+function caveH(x: number, z: number): number {
+  const wob = caveNoise(x, z) * 0.55 + Math.sin(x * 2.1 + z * 1.7) * 0.12;
+  let h = CAVE.wall + caveNoise(x * 0.3, z * 0.3) * 3;
+  for (const s of CAVE_FLOORS) { const sd = caveSd(s, x, z) + wob; if (sd < 0.7) h = lerp(h, s.f + caveNoise(x * 1.9, z * 1.9) * 0.06, smooth(0.7, -0.25, sd)); }
+  for (const s of CAVE_PITS) { const sd = caveSd(s, x, z) + wob * 0.35; if (sd < 0.4) h = lerp(h, CAVE.pit, smooth(0.4, -0.45, sd)); }
+  return h;
+}
+/* the cave's vaulted roof: high enough for the camera, low enough to close the space in */
+const caveCeil = (x: number, z: number) => 17 + caveNoise(x * 0.45 + 3, z * 0.45) * 1.8 + Math.sin(x * 0.13) * 0.8;
+/* open water: the valley's river and lakes; the grotto has none, only chasms */
+const waterAt = (x: number) => inCave(x) ? -1000 : WATER_Y;
 function terrainH(x: number, z: number): number {
+  if (inCave(x)) return caveH(x, z);
   let h = 3 + 3 * Math.sin(x * 0.021) * Math.cos(z * 0.023) + 1.6 * Math.sin(x * 0.052 + 1.3) * Math.sin(z * 0.047 + 0.7)
     + 0.5 * Math.sin(x * 0.13 + z * 0.05) * Math.cos(z * 0.11);
   const d = Math.hypot(x, z);
@@ -118,6 +161,8 @@ const ITEMS: Record<string, ItemDef> = {
   shard: { n: 'Sunstone Shard', c: 'Quest items', d: 'Warm to the touch, even at night.' },
   key: { n: 'Temple Key', c: 'Quest items', d: 'Three shards bound in gold wire. Opens the Temple of Echoes.' },
   heart: { n: 'Heart of the Forest', c: 'Artifacts', d: 'It beats slowly. It seems to know you.' },
+  hook: { n: 'Grappling Hook', c: 'Tools', d: 'Aim at a glowing ring and press G (or the middle mouse button) to reel yourself to it.' },
+  stoneheart: { n: 'Golem Heartstone', c: 'Artifacts', d: 'The vault golem’s crystal heart. It steadies your own.' },
   relic: { n: 'Eldorian Relic', c: 'Collectibles', d: 'A coin-sized seal from the lost kingdom. Five were hidden in the valley.' },
 };
 const RECIPES: Recipe[] = [

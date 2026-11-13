@@ -365,6 +365,8 @@ function setBlock(cx: number, cz: number) {
 function updatePlayer(dt: number) {
   const p = PL, S = G.p;
   p.iframes -= dt; p.hurtT -= dt; p.emberCd -= dt; p.stDelay -= dt; p.animT += dt; p.comboT -= dt; p.castT = (p.castT || 0) - dt; p.pushing = (p.pushing || 0) - dt;
+  /* the grappling hook takes over while it reels you in or holds you up */
+  if (hookDrive(dt)) { p.moving = 0; p.swim = false; S.st = Math.min(S.maxSt, S.st + 10 * dt); animHero(dt); return; }
   let ix = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0), iz = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0);
   if (p.dead || cine) { ix = 0; iz = 0; mouse.l = mouse.r = false; }
   const mag = Math.hypot(ix, iz); camForward(_v1);
@@ -375,7 +377,7 @@ function updatePlayer(dt: number) {
   if (p.rollT > 0) {
     p.rollT -= dt; if (p.rollT <= 0) p.landRoll = false; p.vel.x = p.rollDir.x * (p.rollBack ? 8 : 11.5); p.vel.z = p.rollDir.z * (p.rollBack ? 8 : 11.5); if (!p.rollBack) p.yaw = Math.atan2(p.rollDir.x, p.rollDir.z);
   } else {
-    if (p.grounded && !p.swim && mag > 0) { const g2 = groundAt(p.pos.x + dx * 0.7, p.pos.z + dz * 0.7); if (g2 - p.pos.y > 0.8) p.climb = true; }
+    if (p.grounded && !p.swim && mag > 0) { const g2 = groundAt(p.pos.x + dx * 0.7, p.pos.z + dz * 0.7); if (g2 - p.pos.y > 0.8 && !inCave(p.pos.x)) p.climb = true; }
     p.sprint = keys.ShiftLeft && mag > 0 && S.st > 0.5 && p.grounded && !p.swim && !p.climb && !p.blocking && !aiming && !p.crouch;
     let sp = p.swim ? 3.3 : p.climb ? 1.7 : (p.blocking || aiming) ? 2.7 : p.crouch ? 2.4 : p.sprint ? 9.3 : 5.6;
     if (p.climb) { if (S.st <= 0) sp = 0; else useStamina(15 * dt); }
@@ -398,14 +400,16 @@ function updatePlayer(dt: number) {
   p.pos.x += p.vel.x * dt; p.pos.z += p.vel.z * dt;
   /* under the bridge: open water passes, a bank with no headroom is a wall (slide along it) */
   if (bridgeLowGap(p.pos.x, p.pos.z, p.pos.y, 0.45)) { if (!bridgeLowGap(ox, p.pos.z, p.pos.y, 0.45)) p.pos.x = ox; else if (!bridgeLowGap(p.pos.x, oz, p.pos.y, 0.45)) p.pos.z = oz; else { p.pos.x = ox; p.pos.z = oz; } }
+  /* the grotto's rock walls cannot be climbed: they stop you (slide along them) */
+  if (inCave(p.pos.x)) { const wall = (x: number, z: number) => terrainH(x, z) > p.pos.y + 0.75 && platformAt(x, z, p.pos.y + 0.75) < p.pos.y + 0.75; if (wall(p.pos.x, p.pos.z)) { if (!wall(ox, p.pos.z)) p.pos.x = ox; else if (!wall(p.pos.x, oz)) p.pos.z = oz; else { p.pos.x = ox; p.pos.z = oz; } } }
   if (p.grounded && inTemple(p.pos.x, p.pos.z, 2)) pushBlock();
   resolveCollide(p.pos, 0.45, p.pos.y);
   // vault: jumping into something with a top within reach carries you up onto it
   p.vaultT = (p.vaultT || 0) - dt;
   if (hitTop !== null && !p.grounded && mag > 0 && p.rollT <= 0 && hitTop - p.pos.y < 1.35 && p.vel.y > -9) { const need = Math.sqrt(2 * 27 * (hitTop - p.pos.y + 0.3)); if (p.vel.y < need) { if (p.vaultT <= 0) sfx('step'); p.vel.y = need; p.vaultT = 0.28; p.glideArm = false; } }
-  const dl = Math.hypot(p.pos.x, p.pos.z); if (dl > LIMIT) { p.pos.x *= LIMIT / dl; p.pos.z *= LIMIT / dl; }
+  const dl = Math.hypot(p.pos.x, p.pos.z); if (dl > LIMIT && !inCave(p.pos.x)) { p.pos.x *= LIMIT / dl; p.pos.z *= LIMIT / dl; }
   // vertical
-  const g = floorAt(p.pos.x, p.pos.z, p.pos.y), plat = platformAt(p.pos.x, p.pos.z, p.pos.y), surf = Math.max(g, WATER_Y - 0.95, plat), deep = g < WATER_Y - 0.95 && plat < WATER_Y - 0.95;
+  const wl = waterAt(p.pos.x), g = floorAt(p.pos.x, p.pos.z, p.pos.y), plat = platformAt(p.pos.x, p.pos.z, p.pos.y), surf = Math.max(g, wl - 0.95, plat), deep = g < wl - 0.95 && plat < wl - 0.95;
   p.glide = false;
   if (p.grounded) {
     if (surf < p.pos.y - 0.7) { p.grounded = false; p.vel.y = 0; p.airT = 0; }
@@ -415,7 +419,7 @@ function updatePlayer(dt: number) {
     if (keys.Space && p.glideArm && p.vel.y < -2.6 && S.st > 0) { p.vel.y = -2.6; p.glide = true; useStamina(8 * dt); }
     p.pos.y += p.vel.y * dt;
     if (p.pos.y <= surf) {
-      if (deep) { burst(p.pos.x, WATER_Y, p.pos.z, 0xdff6ff, 18, 5, 0.6); addRing(p.pos.x, WATER_Y + 0.06, p.pos.z, 0xffffff, 2.6, 0.7); sfx('splash'); }
+      if (deep) { burst(p.pos.x, wl, p.pos.z, 0xdff6ff, 18, 5, 0.6); addRing(p.pos.x, WATER_Y + 0.06, p.pos.z, 0xffffff, 2.6, 0.7); sfx('splash'); }
       else if (p.vel.y < -21) hurtPlayer((-p.vel.y - 21) * 3.2, p.pos.x, p.pos.z, { unblockable: true });
       else if (p.vel.y < -6) {
         sfx('land'); burst(p.pos.x, surf + 0.1, p.pos.z, 0xd8d2b8, p.vel.y < -14 ? 12 : 6, 2.2, 0.35, 2);
@@ -507,6 +511,7 @@ function animHero(dt: number) {
   hero.g.rotation.y = p.yaw + spin;
   hero.g.visible = !(p.hurtT > 0 && Math.floor(p.hurtT * 30) % 2 === 0);
   SWORD_TRAIL.update(dt, !!p.atk && CARRY.it.sword.held, !!(p.atk && p.atk.heavy));
+  hookPose();
 }
 /* ---------- gear: sword, shield and bow rebuilt to real proportions (sword ~1.04 m, shield 0.58 m, bow 1.24 m on a 1.78 m hero) ---------- */
 (() => {
@@ -631,7 +636,7 @@ function updateCamera(dt: number, instant?: boolean) {
   _v1.set(p.pos.x + rx * off, p.pos.y + th, p.pos.z + rz * off);
   const dxx = Math.sin(CAM.yaw) * cp, dyy = Math.sin(CAM.pitch), dzz = Math.cos(CAM.yaw) * cp;
   let ok = dist;
-  for (let i = 1; i <= 12; i++) { const d = dist * i / 12, cx = _v1.x + dxx * d, cz = _v1.z + dzz * d, cy = _v1.y + dyy * d; if ((cy < 11 && insideBox(cx, cz, 0.3, cy)) || cy < floorAt(cx, cz, cy) + 0.35 || (onBridge(cx, cz, 0.2) && cy > BRIDGE_SOFFIT - 0.25 && cy < BRIDGE.y + 0.35) || camHits(cx, cz, cy)) { ok = Math.max(0.6, dist * (i - 1) / 12); break; } }
+  for (let i = 1; i <= 12; i++) { const d = dist * i / 12, cx = _v1.x + dxx * d, cz = _v1.z + dzz * d, cy = _v1.y + dyy * d; if ((cy < 11 && insideBox(cx, cz, 0.3, cy)) || cy < floorAt(cx, cz, cy) + 0.35 || (onBridge(cx, cz, 0.2) && cy > BRIDGE_SOFFIT - 0.25 && cy < BRIDGE.y + 0.35) || (inCave(cx) && cy > caveCeil(cx, cz) - 0.7) || camHits(cx, cz, cy)) { ok = Math.max(0.6, dist * (i - 1) / 12); break; } }
   _v2.set(_v1.x + dxx * ok, Math.max(_v1.y + dyy * ok, WATER_Y + 0.35), _v1.z + dzz * ok);
   if (instant) CAM.cur.copy(_v2); else CAM.cur.lerp(_v2, 1 - Math.exp(-16 * dt));
   camera.position.copy(CAM.cur);
@@ -964,6 +969,7 @@ function reviveEnemy(e: Enemy) {
 function damageEnemy(e: Enemy, dmg: number, o: HitOptions) {
   if (!e.alive) return;
   if (e.def.boss) { if (e.state === 'sleep' || e.state === 'wake') return; dmg *= (e.state === 'stun' ? 2 : 0.5) * (o.fire ? 1.5 : 1); }
+  else if (e.def.big) { const k = golemHurt(e, o); if (!k) return; dmg *= k; }
   else { e.kb.set(o.kx || 0, 0, o.kz || 0).multiplyScalar(o.kb || 0); if (e.state !== 'windup' || dmg > 20) { e.state = 'stagger'; e.t = 0; } e.aggro = true; if (e.def.passive) for (const f of enemies) if (f.type === e.type && f.alive && f.pos.distanceTo(e.pos) < 14) f.aggro = true; }
   dmg = Math.max(1, Math.round(dmg)); e.hp -= dmg; e.punch = 0.18; e.flash = 0.16; e.hurtShown = 6;
   dmgText(e.pos.x, e.pos.y + e.def.height + 0.3, e.pos.z, (o.crit ? '✦ ' : '') + dmg, o.crit ? 'crit' : (e.def.boss && e.state === 'stun' ? 'crit' : ''));
@@ -974,6 +980,7 @@ function killEnemy(e: Enemy) {
   e.alive = false; e.deadT = 0; e.hp = 0; if (PL.lock === e) PL.lock = null; hitStop = Math.max(hitStop, 0.11);
   gainXp(e.def.xp); sfx('die');
   if (e.def.boss) { bossDefeated(e); return; }
+  if (e.type === 'golem') { golemDefeated(e); return; }
   const items: Record<string, number> = {}; for (const [id, ch, n] of e.def.loot) if (Math.random() < ch) items[id] = 1 + (Math.random() * n | 0);
   const cr = e.def.coins || [0, 0], coins = cr[0] + (Math.random() * (cr[1] - cr[0] + 1) | 0);
   if (Object.keys(items).length || coins) dropLoot(e.pos.x, e.pos.z, items, coins);

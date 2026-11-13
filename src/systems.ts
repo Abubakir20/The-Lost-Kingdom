@@ -63,6 +63,9 @@ const QUESTS: Record<string, QuestDef> = {
     target: () => !G.flags.g_entry ? [-75.5, -40] : !G.flags.puz1 ? [-90, -33] : !G.flags.puz2 ? [-106, -46] : !G.flags.puz3 ? [-121, -40] : !G.flags.c_boss ? [-145, -40] : [0, 58.5] },
   goblins: { name: 'Clubs and Anvils', kind: 'Side quest', desc: 'Borin the smith wants the thicket goblins thinned out before they steal another cartload of ore.', reward: 'Oakrest steel edge (+6 sword damage), 40 coins',
     obj: (s: { n: number; }) => [['Defeat thicket goblins (' + Math.min(4, s.n) + '/4)', s.n >= 4], ['Return to Borin', false]], target: (s: { n: number; }) => s.n >= 4 ? [NPCS.borin.pos.x, NPCS.borin.pos.z] : [-85, 70] },
+  veil: { name: 'The Hollow Behind the Veil', kind: 'Side quest', desc: 'Pip swears there is a cave behind the great waterfall at Veilfall, far up the valley to the north. Nobody believes him.', reward: 'Grappling Hook, Golem Heartstone (+20 health), 150 XP',
+    obj: (s: { stage: number; }) => [['Find the cave behind the Veilfall waterfall', s.stage >= 1], ['Explore the grotto', s.stage >= 2 || has('hook')], ['Cross the chasms and find what waits in the deep', s.stage >= 3 || !!G.flags.golem], ['Claim the golem’s heart', !!G.flags.c_golem]],
+    target: (s: { stage: number; }) => s.stage < 1 ? [CAVE_MOUTH.x, CAVE_MOUTH.z] : !has('hook') ? [327.5, 9] : !G.flags.golem ? [ARENA.x, ARENA.z] : [ARENA.x + 4.5, ARENA.z + 4.5] },
   herbs: { name: 'Silver for a Fever', kind: 'Side quest', desc: 'Tessa’s stock of silverleaf is gone. The pale herb grows near old stones and in the western woods.', reward: '3 Healing Draughts, 30 coins',
     obj: () => [['Gather silverleaf (' + Math.min(4, G.inv.herb || 0) + '/4)', has('herb', 4)], ['Bring it to Tessa', false]], target: () => has('herb', 4) ? [NPCS.tessa.pos.x, NPCS.tessa.pos.z] : [-95, 20] },
 };
@@ -123,6 +126,8 @@ function chest(id: string, x: number, z: number, items: Record<string, number>, 
     for (const k in items) giveItem(k, items[k]); if (coins) giveCoins(coins);
     if (items.shard) { notify('Sunstone Shards: ' + shardCount() + '/3', 'quest'); }
     if (items.heart) { banner('Heart of the Forest', 'It beats in time with your own'); G.p.maxHp += 20; G.p.hp = G.p.maxHp; }
+    if (items.hook) { banner('Grappling Hook', 'Look at a glowing ring and press G'); notify('Aim at a glowing ring and press G (or the middle mouse button). From a hanging ring, press G again at the next one, or Space to let go.', 'quest'); }
+    if (items.stoneheart) { banner('Golem Heartstone', 'Your health has grown'); G.p.maxHp += 20; G.p.hp = G.p.maxHp; qDone('veil'); gainXp(150); }
     gainXp(10); autosave();
   } });
   return c;
@@ -353,6 +358,7 @@ function updateDiscovery(dt: number) {
 function regionName() {
   for (const L of LOCS) if (Math.hypot(PL.pos.x - L.x, PL.pos.z - L.z) < L.r) return L.name;
   if (inTemple(PL.pos.x, PL.pos.z)) return 'Temple of Echoes';
+  if (inCave(PL.pos.x)) return 'Veilfall Grotto';
   return PL.pos.x < riverX(PL.pos.z) - 10 ? 'Edge of the Forgotten Forest' : 'Greenwind Valley';
 }
 function travelTo(id: string) {
@@ -368,8 +374,8 @@ function playerDied() {
 /* where the player comes back: the last waystone touched (the shrine's at first) */
 function respawnPoint(): number[] { const L = LOCS.find(l => l.id === G.p.respawn && l.way) || LOCS[0]; return L.way || [0, 55.5]; }
 function respawn() {
-  const W = respawnPoint();
-  fade(() => { G.p.hp = G.p.maxHp; G.p.st = G.p.maxSt; G.p.mp = G.p.maxMp; PL.dead = false; PL.iframes = 2; bossReset(); for (const e of enemies) if (e.alive && !e.def.boss) { e.aggro = false; e.state = 'return'; } placePlayer(W[0] + 1.6, W[1] + 1.6); setMode('play'); });
+  const inC = inCave(PL.pos.x), W = inC ? caveRespawnPoint() : respawnPoint(), off = inC ? 0 : 1.6;
+  fade(() => { G.p.hp = G.p.maxHp; G.p.st = G.p.maxSt; G.p.mp = G.p.maxMp; PL.dead = false; PL.iframes = 2; bossReset(); hookRelease(); for (const e of enemies) if (e.alive && !e.def.boss && !e.def.big) { e.aggro = false; e.state = 'return'; } golemReset(); clearHazards(); placePlayer(W[0] + off, W[1] + off); setMode('play'); });
 }
 function bossDefeated(e: Enemy) {
   G.flags.boss = true; bossFight = false; clearHazards(); sfx('roar'); hitStop = 0.25;
@@ -381,7 +387,8 @@ function bossDefeated(e: Enemy) {
 }
 let lastSave = 0;
 function autosave() { if (MODE === 'menu') return; syncSaveState(); if (writeSave()) { lastSave = performance.now(); const s = $('saveIcon'); s.classList.add('on'); setTimeout(() => s.classList.remove('on'), 1400); } }
-function syncSaveState() { const S = G.p; S.x = PL.pos.x; S.y = PL.pos.y; S.z = PL.pos.z; S.yaw = PL.yaw; if (PL.dead || bossFight) { const W = respawnPoint(); S.x = W[0] + 1.6; S.z = W[1] + 1.6; S.y = groundAt(S.x, S.z); if (S.hp <= 0) S.hp = S.maxHp; } }
+function syncSaveState() { const S = G.p; S.x = PL.pos.x; S.y = PL.pos.y; S.z = PL.pos.z; S.yaw = PL.yaw; if (PL.dead || bossFight) { const W = respawnPoint(); S.x = W[0] + 1.6; S.z = W[1] + 1.6; S.y = groundAt(S.x, S.z); if (S.hp <= 0) S.hp = S.maxHp; }
+  if (inCave(PL.pos.x) && (golemFight || HOOK.state !== 'none' || !PL.grounded || PL.dead)) { const W = caveRespawnPoint(); S.x = W[0]; S.z = W[1]; S.y = groundAt(S.x, S.z); if (S.hp <= 0) S.hp = S.maxHp; } }
 /* bring every world object in line with G (after New Game / Continue) */
 function syncWorld() {
   for (const id in CHESTS) { const c = CHESTS[id]; c.lid.rotation.x = G.flags[id] ? -1.9 : 0; c.open = 0; c.hl.visible = !G.flags[id]; if (id === 'c_boss') { c.g.visible = !!G.flags.boss; c.col.on = !!G.flags.boss; } }
@@ -394,7 +401,7 @@ function syncWorld() {
   bossReset();
   const S = G.p; PL.pos.set(S.x, S.y, S.z); PL.yaw = S.yaw; PL.vel.set(0, 0, 0); PL.grounded = false; PL.dead = false; PL.atk = null; PL.hold = -1; PL.draw = -1; PL.lock = null; PL.rollT = 0; PL.crouch = false; PL.iframes = 1;
   PL.pos.y = Math.max(S.y, groundAt(S.x, S.z)); CAM.yaw = S.yaw + Math.PI; CAM.pitch = 0.3;
-  updateTemple(0.016, true); updateCamera(0.016, true);
+  updateTemple(0.016, true); caveSync(); updateCamera(0.016, true);
 }
 
 /* ---------- panels ---------- */
@@ -418,7 +425,7 @@ const ebarPool: HTMLDivElement[] = [];
 function updateEnemyBars() {
   let n = 0; const layer = $('ebars'), W = window.innerWidth || 1280, H = window.innerHeight || 720;
   if (MODE === 'play' && !cine) for (const e of enemies) {
-    if (!e.alive || e.def.boss || e.hp >= e.def.hp || !(e.hurtShown > 0 || e.state === 'chase' || e.state === 'windup')) continue;
+    if (!e.alive || e.def.boss || e.def.big || e.hp >= e.def.hp || !(e.hurtShown > 0 || e.state === 'chase' || e.state === 'windup')) continue;
     _pv.set(e.pos.x, e.pos.y + e.def.height + 0.35, e.pos.z).project(camera); if (_pv.z > 1 || Math.abs(_pv.x) > 1.05 || Math.abs(_pv.y) > 1.05) continue;
     let el = ebarPool[n]; if (!el) { el = ebarPool[n] = document.createElement('div'); el.className = 'ebar'; el.innerHTML = '<i></i>'; layer.appendChild(el); }
     el.style.display = 'block'; el.style.transform = 'translate(' + ((_pv.x * 0.5 + 0.5) * W - 30).toFixed(1) + 'px,' + ((-_pv.y * 0.5 + 0.5) * H).toFixed(1) + 'px)'; (el.firstChild as HTMLElement).style.width = (e.hp / e.def.hp * 100) + '%'; n++;

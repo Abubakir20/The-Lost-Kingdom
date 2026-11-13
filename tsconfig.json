@@ -11,5 +11,5 @@
     "newLine": "lf",
     "skipLibCheck": true
   },
-  "files": ["src/globals.d.ts", "src/core.ts", "src/world.ts", "src/scenery.ts", "src/entities.ts", "src/systems.ts", "src/ui.ts", "src/main.ts"]
+  "files": ["src/globals.d.ts", "src/core.ts", "src/world.ts", "src/scenery.ts", "src/entities.ts", "src/systems.ts", "src/cave.ts", "src/ui.ts", "src/main.ts"]
 }

@@ -542,3 +542,5 @@ function paved(x: number, z: number) {
 }
 buildVegetation();
 bake(STATIC);
+/* everything built so far belongs to the open valley: hidden while the camera is down in the grotto (see updateCave) */
+const OUTDOOR = scene.children.filter(o => !(o as THREE.Light).isLight && o !== partPts && o !== sun.target && o !== rain);

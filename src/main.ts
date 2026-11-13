@@ -82,11 +82,11 @@ function updateAudio(dt: number) {
   AU.water.gain.setTargetAtTime(clamp(1 - dr / 26, 0, 1) * 0.05 + clamp(1 - dfall / 70, 0, 1) * 0.22, t, 0.4);
   AU.rain.gain.setTargetAtTime(rainAmt * 0.07, t, 0.5);
   if (MODE === 'pause' || MODE === 'settings') return;
-  AU.amb = (AU.amb || 2) - dt; if (AU.amb <= 0) { AU.amb = 1.2 + Math.random() * 4; if (rainAmt < 0.3 && !(bossFight && boss && boss.alive)) sfx(nightAmt > 0.5 ? 'cricket' : 'bird'); }
+  AU.amb = (AU.amb || 2) - dt; if (AU.amb <= 0) { AU.amb = 1.2 + Math.random() * 4; if (rainAmt < 0.3 && !bigFoe() && caveAmt < 0.5) sfx(nightAmt > 0.5 ? 'cricket' : 'bird'); }
   AU.beat -= dt; if (AU.beat > 0) return;
-  const fight = bossFight && boss && boss.alive;
-  if (fight && boss) {
-    AU.beat = boss.phase === 2 ? 0.22 : 0.28; AU.step++;
+  const foe = bigFoe(), fight = !!foe;
+  if (fight && foe) {
+    AU.beat = foe.rage ? 0.22 : 0.28; AU.step++;
     if (AU.step % 2 === 0) nz(0.12, 0.3, 90, 'lowpass');
     tone(BOSS_SCALE[(AU.step * 5 + (AU.step >> 3)) % 6], 0.26, 'sawtooth', 0.045, AU.mus);
     if (AU.step % 8 === 0) tone(55, 1.6, 'triangle', 0.2, AU.mus);
@@ -104,6 +104,7 @@ function updateAudio(dt: number) {
 [[-102, 26], [-72, -62], [-132, 44]].forEach(p => spawnEnemy('wisp', p[0], p[1]));
 [[-98, 17], [-121, -40]].forEach(p => spawnEnemy('sentinel', p[0], p[1]));
 boss = spawnEnemy('boss', -148, -40); boss.phase = 1; boss.state = 'sleep';
+populateCave();
 
 /* ---------- modes & menus ---------- */
 let plocked = false, settingsBack = 'menu';
@@ -160,9 +161,11 @@ window.addEventListener('keydown', ev => {
     keys[c] = true;
     if (PL.dead) return;
     if (c === 'ShiftRight') keys.ShiftLeft = true;
-    if (c === 'Space' && PL.grounded && !PL.swim) { PL.vel.y = 9.7; PL.grounded = false; PL.airT = 0; PL.crouch = false; PL.glideArm = false; sfx('jump'); }
+    if (c === 'Space' && HOOK.state === 'hang') hookRelease();
+    else if (c === 'Space' && PL.grounded && !PL.swim) { PL.vel.y = 9.7; PL.grounded = false; PL.airT = 0; PL.crouch = false; PL.glideArm = false; sfx('jump'); }
     else if (c === 'Space' && !PL.grounded) PL.glideArm = true;
     else if (c === 'KeyE') { if (nearInteract) { const it = nearInteract; nearInteract = null; it.act(); } }
+    else if (c === 'KeyG') fireHook();
     else if (c === 'KeyQ') castEmber(); else if (c === 'KeyF') dodge(); else if (c === 'KeyR') toggleLock();
     else if (c === 'KeyC') { if (PL.grounded && !PL.swim) PL.crouch = !PL.crouch; }
     else if (c === 'Digit1') setWeapon('sword'); else if (c === 'Digit2') setWeapon('bow'); else if (c === 'Digit3') { if (!has('potion')) notify('No Healing Draughts left.'); else useItem('potion'); }
@@ -185,6 +188,7 @@ canvas.addEventListener('mousedown', ev => {
   if (PL.dead || cine) return;
   if (ev.button === 0) { mouse.l = true; if (G.p.weapon === 'sword') { PL.hold = 0; PL.chargeFx = false; startAttack(false); } else if (has('arrow')) PL.draw = 0; else { notify('No arrows left. Fletch some from deadwood and flint.'); sfx('deny'); } }
   else if (ev.button === 2) mouse.r = true;
+  else if (ev.button === 1) { ev.preventDefault(); fireHook(); }
 });
 window.addEventListener('mouseup', ev => {
   if (ev.button === 0) {
@@ -225,7 +229,7 @@ function frame(now: number) {
     if (MODE === 'play') {
       G.time = (G.time + dt / 720) % 1; G.playTime += raw;
       updatePlayer(dt);
-      for (const e of enemies) if (e.def.boss) updateBoss(e, dt); else updateEnemy(e, dt);
+      for (const e of enemies) if (e.def.boss) updateBoss(e, dt); else if (e.type === 'golem') updateGolem(e, dt); else if (e.type === 'bat' && e.alive) updateBat(e, dt); else updateEnemy(e, dt);
       updateProjs(dt); updateHitFeedback(dt, raw); updateHazards(dt); updateDrops(dt); updateNPCs(dt); updateTemple(dt); updateDiscovery(dt); updateWeather(raw, PL.pos);
       interT -= dt; if (interT <= 0) { interT = 0.12; findInteract(); }
       saveT -= raw; if (saveT <= 0) { saveT = 60; if (!PL.dead && !cine) autosave(); }
@@ -236,7 +240,7 @@ function frame(now: number) {
       camera.position.set(Math.sin(menuAng) * 25, y + 6.5 + Math.sin(menuAng * 0.7) * 1.5, 60 + Math.cos(menuAng) * 25); camera.lookAt(-6, y + 4.2, 58);
       hero.g.visible = false; updateNPCs(raw); _focus.set(0, y, 60);
     } else { hero.g.visible = hero.g.visible || MODE !== 'play'; if (cine && MODE === 'play') updateCine(raw); else if (!cine) updateCamera(raw); _focus.copy(PL.pos); }
-    updateParticles(dt); updateRings(dt); updateSky(G.time, _focus); updateChunks(raw, camera.position); updateDrift(raw, _focus, tsec); updateLife(raw, tsec);
+    updateParticles(dt); updateRings(dt); updateSky(G.time, _focus); updateCave(dt, raw, tsec); updateChunks(raw, camera.position); updateDrift(raw, _focus, tsec); updateLife(raw, tsec);
     // ambient motion
     waterTex.offset.x += raw * 0.006; waterTex.offset.y += raw * 0.016; waterfall.tx.offset.y += raw * 0.95; waterfall.tx2.offset.y += raw * 1.5;
     waterfall.mist.forEach((m, i) => { const s = [16, 11, 12][i] * (1 + Math.sin(tsec * 0.9 + i * 2) * 0.12); m.scale.set(s, s * 0.7, 1); }); waterfall.foam.scale.set(8 + Math.sin(tsec * 2) * 0.5, 3 + Math.cos(tsec * 2.6) * 0.3, 1);

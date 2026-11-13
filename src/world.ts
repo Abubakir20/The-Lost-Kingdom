@@ -712,7 +712,7 @@ function updateWeather(dt: number, focus: THREE.Vector3) {
   if (weather.next <= 0) { weather.raining = !weather.raining; weather.next = weather.raining ? rand(55, 95) : rand(180, 320); }
   rainAmt = clamp(rainAmt + (weather.raining ? dt : -dt) * 0.22, 0, 1);
   flashAmt = Math.max(0, flashAmt - dt * 2.4);
-  rain.visible = rainAmt > 0.02;
+  rain.visible = rainAmt > 0.02 && !inCave(focus.x);
   if (rain.visible) {
     rain.position.set(focus.x, focus.y - 3, focus.z); rain.material.opacity = 0.5 * rainAmt;
     for (let i = 0; i < RAIN_N; i++) {

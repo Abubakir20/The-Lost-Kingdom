@@ -60,7 +60,7 @@ function renderPanel() {
   const meter = (label: string, v: number, max: number, cls: string) => `<div class="meter ${cls}"><span>${label}</span><div><i style="width:${clamp(v / max * 100, 0, 100)}%"></i></div><em>${Math.ceil(v)} / ${max}</em></div>`;
   if (panelTab === 'inventory') {
     const cats: Record<string, string[]> = {}; for (const id in G.inv) { if (!G.inv[id] || !ITEMS[id]) continue; (cats[ITEMS[id].c] = cats[ITEMS[id].c] || []).push(id); }
-    const order = ['Weapons', 'Potions', 'Food', 'Materials', 'Quest items', 'Artifacts', 'Collectibles'];
+    const order = ['Weapons', 'Tools', 'Potions', 'Food', 'Materials', 'Quest items', 'Artifacts', 'Collectibles'];
     let items = ''; for (const c of order) if (cats[c]) items += `<h4>${c}</h4>` + cats[c].map((id: string) => row(id, esc(ITEMS[id].n), '×' + G.inv[id], esc(ITEMS[id].d || ''), ITEMS[id].use ? `<button data-act="use:${id}">Use</button>` : '')).join('');
     const rec = RECIPES.map((r, i) => { const ok = Object.keys(r.need).every(k => has(k, r.need[k])); return row(r.out, esc(r.label), '', Object.keys(r.need).map(k => `<span class="chip${has(k, r.need[k]) ? '' : ' no'}">${r.need[k]} ${esc(ITEMS[k].n)} <i>(${G.inv[k] || 0})</i></span>`).join(' '), `<button data-act="craft:${i}" ${ok ? '' : 'disabled'}>Craft</button>`); }).join('');
     const swordName = ['Warden’s Blade', 'Oakrest Steel Blade', 'Echo-folded Blade', 'Sunstone Edge'][Math.min(3, S.swordLv)];
@@ -133,15 +133,17 @@ function updateHUD(dt: number) {
   $('slotSword').classList.toggle('on', S.weapon === 'sword'); $('slotBow').classList.toggle('on', S.weapon === 'bow'); $('slotBow').classList.toggle('locked', !S.hasBow); $('slotEmber').classList.toggle('locked', !S.ember);
   $('slotEmber').classList.toggle('cool', PL.emberCd > 0 || S.mp < 18); $('arrowsN').textContent = S.hasBow ? String(G.inv.arrow || 0) : '–'; $('potN').textContent = String(G.inv.potion || 0); $('slotPot').classList.toggle('cool', !G.inv.potion);
   $('cross').classList.toggle('aim', S.weapon === 'bow'); $('cross').classList.toggle('draw', PL.draw > 0.15); $('cross').classList.toggle('lock', !!PL.lock);
-  const bb = $('bossBar'); if (bossFight && boss && boss.alive && boss.state !== 'wake') { bb.style.display = 'block'; $('bossFill').style.width = (boss.hp / boss.def.hp * 100) + '%'; bb.classList.toggle('exposed', boss.state === 'stun'); bb.classList.toggle('rage', boss.phase === 2); } else bb.style.display = 'none';
+  const bb = $('bossBar'), bf = bigFoe(); if (bf) { bb.style.display = 'block'; $('bossName').textContent = bf.name; $('bossFill').style.width = (bf.e.hp / bf.e.def.hp * 100) + '%'; bb.classList.toggle('exposed', bf.exposed); bb.classList.toggle('rage', bf.rage); } else bb.style.display = 'none';
   const hh = Math.floor(G.time * 24), mm = Math.floor((G.time * 24 - hh) * 6) * 10; $('region').textContent = regionName(); $('clock').textContent = (hh < 10 ? '0' : '') + hh + ':' + (mm < 10 ? '0' : '') + mm + (weather.raining ? ', rain' : ''); $('dayIcon').className = nightAmt > 0.5 ? 'moon' : 'sun';
   miniT -= 1; if (miniT <= 0) { miniT = 2; drawMini(o); }
 }
 function drawMini(o: Objective | null) {
-  const N = 150, span = 150, sc = MAPN / (WORLD * 2), x = mini;
+  const N = 150, span = inCave(PL.pos.x) ? 70 : 150, sc = MAPN / (WORLD * 2), x = mini;
   x.save(); x.clearRect(0, 0, N, N); x.beginPath(); x.arc(N / 2, N / 2, N / 2, 0, 6.3); x.clip();
-  x.fillStyle = '#7fb0b6'; x.fillRect(0, 0, N, N);
-  x.drawImage(mapCanvas, (PL.pos.x + WORLD - span / 2) * sc, (PL.pos.z + WORLD - span / 2) * sc, span * sc, span * sc, 0, 0, N, N);
+  const cave = inCave(PL.pos.x);
+  x.fillStyle = cave ? '#282c34' : '#7fb0b6'; x.fillRect(0, 0, N, N);
+  if (cave) { const cs = span, k = CAVE_MAP.W / (CAVE.x1 - CAVE.x0); x.drawImage(CAVE_MAP.c, (PL.pos.x - CAVE.x0 - cs / 2) * k, (PL.pos.z - CAVE.z0 - cs / 2) * k, cs * k, cs * k, 0, 0, N, N); }
+  else x.drawImage(mapCanvas, (PL.pos.x + WORLD - span / 2) * sc, (PL.pos.z + WORLD - span / 2) * sc, span * sc, span * sc, 0, 0, N, N);
   const P = (wx: number, wz: number) => [N / 2 + (wx - PL.pos.x) / span * N, N / 2 + (wz - PL.pos.z) / span * N];
   for (const L of LOCS) if (G.disc[L.id]) { const [a, b] = P(L.x, L.z); x.fillStyle = L.way ? '#1f8f86' : '#5a3d28'; x.strokeStyle = '#f6ead0'; x.lineWidth = 1.2; x.beginPath(); x.arc(a, b, 3.4, 0, 6.3); x.fill(); x.stroke(); }
   for (const id in NPCS) { const [a, b] = P(NPCS[id].pos.x, NPCS[id].pos.z); x.fillStyle = '#2f7a3a'; x.fillRect(a - 1.8, b - 1.8, 3.6, 3.6); }
